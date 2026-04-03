@@ -1,0 +1,39 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  network:
+    network:
+      version: 2
+      ethernets:
+        eth0:
+          dhcp4: true
+  storage:
+    layout:
+      name: direct
+  identity:
+    hostname: ubuntu-packer
+    username: labadmin
+    # Password: P@ssw0rd!Lab1 (hashed with mkpasswd --method=SHA-512)
+    password: "$6$rounds=4096$labsalt$zR.UfDJfNJxwZ8a4RzOr0VqN7KsJd1mRfA5U2.C9hPGgXVkLMNY3bwEO1sQxTIPvHN0WHTZhJjq7pDo5qW.z."
+  ssh:
+    install-server: true
+    allow-pw: true
+  packages:
+    - python3
+    - python3-pip
+    - curl
+    - wget
+    - git
+    - vim
+    - open-vm-tools
+  package_update: true
+  package_upgrade: true
+  late-commands:
+    # Allow labadmin passwordless sudo for Ansible
+    - echo 'labadmin ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/labadmin
+    - chmod 440 /target/etc/sudoers.d/labadmin
+  user-data:
+    disable_root: true

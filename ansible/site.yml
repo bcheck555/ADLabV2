@@ -1,0 +1,86 @@
+---
+# ADLabV2 Master Playbook
+# Run order matters: GIT01 first, DC01 next (forest root), then all dependents.
+# Use --limit <host> to run a single VM. Use tags to run subsets.
+#
+# Full run:
+#   docker-compose -f docker/docker-compose.yml run ansible ansible-playbook site.yml
+#
+# Single VM:
+#   docker-compose -f docker/docker-compose.yml run ansible \
+#     ansible-playbook site.yml --limit dc01
+#
+# Skip already-done phases (idempotent, but faster):
+#   ansible-playbook site.yml --skip-tags domain_join
+
+# ── 0. GitLab CE (outside domain, no dependencies) ──────────────────────────
+- name: Configure GIT01 (GitLab CE)
+  hosts: git01
+  gather_facts: true
+  roles:
+    - common_linux
+    - gitlab
+  tags: [git01, gitlab]
+
+# ── 1. Primary Domain Controller ─────────────────────────────────────────────
+- name: Configure DC01 (Primary DC, forest root)
+  hosts: dc01
+  gather_facts: false
+  roles:
+    - common_windows
+    - domain_controller
+  tags: [dc01, ad, dns]
+
+# ── 2. Secondary Domain Controller ───────────────────────────────────────────
+- name: Configure DC02 (Additional DC)
+  hosts: dc02
+  gather_facts: false
+  roles:
+    - common_windows
+    - secondary_dc
+  tags: [dc02, ad]
+
+# ── 3. Enterprise CA ─────────────────────────────────────────────────────────
+- name: Configure CA01 (Enterprise Root CA)
+  hosts: ca01
+  gather_facts: false
+  roles:
+    - common_windows
+    - certificate_authority
+  tags: [ca01, pki]
+
+# ── 4. SQL Server ────────────────────────────────────────────────────────────
+- name: Configure DB01 (SQL Server 2022)
+  hosts: db01
+  gather_facts: false
+  roles:
+    - common_windows
+    - sql_server
+  tags: [db01, sql]
+
+# ── 5. IIS Web Server ────────────────────────────────────────────────────────
+- name: Configure WEB01 (IIS)
+  hosts: web01
+  gather_facts: false
+  roles:
+    - common_windows
+    - iis
+  tags: [web01, iis]
+
+# ── 6. Workstations ──────────────────────────────────────────────────────────
+- name: Configure workstations (WKS01, WKS02)
+  hosts: workstations
+  gather_facts: false
+  roles:
+    - common_windows
+    - workstation
+  tags: [workstations, wks]
+
+# ── 7. SCVMM (last — depends on domain + SQL) ────────────────────────────────
+- name: Configure VMM01 (SCVMM 2025)
+  hosts: vmm01
+  gather_facts: false
+  roles:
+    - common_windows
+    - scvmm
+  tags: [vmm01, scvmm]

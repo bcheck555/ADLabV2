@@ -1,0 +1,40 @@
+# === OpenTofu / Terraform ===
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/tfplan
+terraform/terraform.tfvars        # Contains credentials — NEVER commit
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/crash.log
+
+# === Packer ===
+packer/*/output/
+packer_cache/
+
+# === Ansible ===
+ansible/.vault_pass               # Vault password file — NEVER commit
+ansible/*.retry
+ansible/roles/*/files/isos/       # Large ISO files
+
+# === Base VHDs (large binary files — store separately) ===
+base-vhds/
+
+# === VM disks ===
+vms/
+
+# === Docker ===
+docker/.env
+
+# === Secrets / credentials ===
+*.pfx
+*.p12
+*.key
+*.pem
+secrets/
+
+# === OS / editor ===
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+.vscode/settings.json

@@ -1,0 +1,25 @@
+---
+# common_linux/tasks/main.yml
+# Baseline configuration for Linux VMs (GIT01).
+
+- name: Set static IP via netplan
+  ansible.builtin.template:
+    src: 99-lab-static.yaml.j2
+    dest: /etc/netplan/99-lab-static.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  notify: apply netplan
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Ensure /etc/hosts has correct entry
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ ansible_host }} {{ inventory_hostname }}.{{ lab_domain_name }} {{ inventory_hostname }}"
+    regexp: "^{{ ansible_host }}"
+
+- name: Flush handlers (apply netplan before continuing)
+  ansible.builtin.meta: flush_handlers

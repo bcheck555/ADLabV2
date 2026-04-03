@@ -1,0 +1,32 @@
+---
+# workstation/tasks/main.yml
+# Joins Win11 workstations to the domain.
+
+- name: Join domain
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' `
+          -OUPath "OU=Lab Workstations,{{ lab_domain_dn }}" `
+          -Credential $domainCred -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Add domain users to local Remote Desktop group
+  ansible.windows.win_group_membership:
+    name: Remote Desktop Users
+    members:
+      - "{{ lab_domain_netbios }}\\Domain Users"
+    state: present

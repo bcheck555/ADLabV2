@@ -1,0 +1,58 @@
+---
+# gitlab/tasks/main.yml
+# Installs GitLab CE on GIT01 (Ubuntu 24.04).
+# After this role runs, push the ADLabV2 repo to GitLab and register a runner
+# on the Hyper-V host to enable CI/CD for future lab rebuilds.
+
+- name: Install GitLab dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - tzdata
+      - perl
+      - postfix
+    state: present
+    update_cache: true
+
+- name: Configure postfix for local delivery (non-interactive)
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "'Local only'"
+    vtype: select
+
+- name: Add GitLab CE apt repository
+  ansible.builtin.shell: |
+    curl -sS https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | bash
+  args:
+    creates: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+
+- name: Install GitLab CE
+  ansible.builtin.apt:
+    name: "gitlab-ce={{ gitlab_version }}-ce.0"
+    state: present
+    update_cache: true
+  environment:
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
+
+- name: Configure GitLab (gitlab.rb)
+  ansible.builtin.template:
+    src: gitlab.rb.j2
+    dest: /etc/gitlab/gitlab.rb
+    owner: root
+    group: root
+    mode: '0600'
+  notify: reconfigure gitlab
+
+- name: Flush handlers (reconfigure before setting root password)
+  ansible.builtin.meta: flush_handlers
+
+- name: Set GitLab root password
+  ansible.builtin.command: >
+    gitlab-rails runner
+    "user = User.find_by_username('root');
+     user.password = '{{ gitlab_root_password }}';
+     user.password_confirmation = '{{ gitlab_root_password }}';
+     user.save!"
+  no_log: true
+  changed_when: false

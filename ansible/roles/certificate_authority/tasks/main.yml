@@ -1,0 +1,65 @@
+---
+# certificate_authority/tasks/main.yml
+# Installs an Enterprise Root CA (ADCS) on CA01.
+
+- name: Join domain first
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Install ADCS feature
+  ansible.windows.win_feature:
+    name:
+      - ADCS-Cert-Authority
+      - RSAT-ADCS
+    state: present
+    include_management_tools: true
+  register: adcs_feature
+
+- name: Reboot after ADCS feature install
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+  when: adcs_feature.reboot_required
+
+- name: Configure Enterprise Root CA
+  ansible.windows.win_powershell:
+    script: |
+      # Check if CA is already configured
+      if (Get-Service CertSvc -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running') {
+        Write-Host "CA already configured."
+        return
+      }
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+
+      Install-AdcsCertificationAuthority `
+        -CAType EnterpriseRootCA `
+        -CACommonName '{{ lab_domain_netbios }}-CA' `
+        -CADistinguishedNameSuffix '{{ lab_domain_dn }}' `
+        -KeyLength 2048 `
+        -HashAlgorithmName SHA256 `
+        -ValidityPeriod Years `
+        -ValidityPeriodUnits 10 `
+        -Credential $domainCred `
+        -Force
+
+- name: Start and enable certificate services
+  ansible.windows.win_service:
+    name: CertSvc
+    state: started
+    start_mode: auto

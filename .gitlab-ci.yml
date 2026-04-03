@@ -1,0 +1,122 @@
+# ADLabV2 GitLab CI/CD Pipeline
+#
+# Prerequisites:
+#   1. GitLab Runner installed on the Hyper-V host (shell executor, PowerShell)
+#   2. Runner registered with GIT01's GitLab instance
+#   3. CI/CD variables set in GitLab (Settings → CI/CD → Variables):
+#      - LAB_HOST_PASSWORD  (masked) — Hyper-V host admin password
+#      - LAB_PASSWORD       (masked) — Lab VM local/domain admin password
+#      - ANSIBLE_VAULT_PASS (masked, file) — Vault password if using vault
+#
+# Bootstrap note: This pipeline runs AFTER GitLab is up. The first run
+# of GIT01 + DC01 must be done manually via Build-Lab.ps1.
+
+stages:
+  - packer
+  - terraform
+  - ansible
+
+# ── Packer stages (manual — long-running, triggered explicitly) ───────────────
+
+packer:ws2025:
+  stage: packer
+  when: manual
+  tags: [hyperv-host]
+  script:
+    - packer init packer/ws2025/
+    - packer build packer/ws2025/
+  rules:
+    - changes: [packer/ws2025/**/*]
+      when: manual
+    - when: manual
+
+packer:win11:
+  stage: packer
+  when: manual
+  tags: [hyperv-host]
+  script:
+    - packer init packer/win11/
+    - packer build packer/win11/
+  rules:
+    - changes: [packer/win11/**/*]
+      when: manual
+    - when: manual
+
+packer:ubuntu2404:
+  stage: packer
+  when: manual
+  tags: [hyperv-host]
+  script:
+    - packer init packer/ubuntu2404/
+    - packer build packer/ubuntu2404/
+  rules:
+    - changes: [packer/ubuntu2404/**/*]
+      when: manual
+    - when: manual
+
+# ── OpenTofu stages ───────────────────────────────────────────────────────────
+
+terraform:plan:
+  stage: terraform
+  tags: [hyperv-host]
+  script:
+    - cd terraform
+    - tofu init -input=false
+    - tofu plan -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -out=tfplan
+  artifacts:
+    paths:
+      - terraform/tfplan
+    expire_in: 1 hour
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+
+terraform:apply:
+  stage: terraform
+  when: manual
+  tags: [hyperv-host]
+  script:
+    - cd terraform
+    - tofu init -input=false
+    - tofu apply -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -auto-approve
+  dependencies:
+    - terraform:plan
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+terraform:destroy:
+  stage: terraform
+  when: manual
+  tags: [hyperv-host]
+  script:
+    - cd terraform
+    - tofu init -input=false
+    - tofu destroy -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -auto-approve
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ── Ansible stages ────────────────────────────────────────────────────────────
+
+ansible:deploy:
+  stage: ansible
+  tags: [hyperv-host]
+  script:
+    - docker-compose -f docker/docker-compose.yml build
+    - docker-compose -f docker/docker-compose.yml run --rm ansible
+        ansible-playbook site.yml
+        -e "lab_password=$env:LAB_PASSWORD"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+
+ansible:ping:
+  stage: ansible
+  tags: [hyperv-host]
+  script:
+    - docker-compose -f docker/docker-compose.yml run --rm
+        --entrypoint ansible ansible
+        all -m ping
+        -e "lab_password=$env:LAB_PASSWORD"
+  rules:
+    - when: manual

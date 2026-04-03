@@ -1,0 +1,106 @@
+---
+# domain_controller/tasks/main.yml
+# Installs AD DS and promotes DC01 as the forest root for lab.local.
+
+- name: Install AD DS and DNS Windows features
+  ansible.windows.win_feature:
+    name:
+      - AD-Domain-Services
+      - DNS
+      - RSAT-AD-Tools
+      - RSAT-DNS-Server
+    state: present
+    include_management_tools: true
+  register: ad_feature
+
+- name: Reboot after feature install if required
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+  when: ad_feature.reboot_required
+
+- name: Check if domain already exists
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $domain = Get-ADDomain -ErrorAction Stop
+        $Ansible.Result = $domain.DNSRoot
+      } catch {
+        $Ansible.Result = ''
+      }
+  register: domain_check
+
+- name: Promote DC01 as forest root
+  ansible.windows.win_powershell:
+    script: |
+      $securePass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $dsrmPass   = ConvertTo-SecureString '{{ lab_dsrm_password }}' -AsPlainText -Force
+      $cred = New-Object PSCredential("Administrator", $securePass)
+
+      Import-Module ADDSDeployment
+      Install-ADDSForest `
+        -DomainName '{{ lab_domain_name }}' `
+        -DomainNetbiosName '{{ lab_domain_netbios }}' `
+        -SafeModeAdministratorPassword $dsrmPass `
+        -InstallDns `
+        -NoRebootOnCompletion `
+        -Force
+  when: domain_check.result == ''
+  register: forest_install
+
+- name: Reboot to complete AD DS promotion
+  ansible.windows.win_reboot:
+    reboot_timeout: 600
+    post_reboot_delay: 60
+  when: forest_install is changed
+
+- name: Wait for AD web services to be ready
+  ansible.windows.win_powershell:
+    script: |
+      $maxRetries = 30
+      for ($i = 1; $i -le $maxRetries; $i++) {
+        try {
+          $null = Get-ADDomain -ErrorAction Stop
+          Write-Host "AD DS ready."
+          break
+        } catch {
+          if ($i -eq $maxRetries) { throw "AD DS not ready after $($maxRetries * 10)s" }
+          Start-Sleep -Seconds 10
+        }
+      }
+
+- name: Create lab OUs
+  community.windows.win_domain_ou:
+    name: "{{ item.name }}"
+    path: "{{ item.path }}"
+    state: present
+  loop:
+    - { name: "Lab Servers",    path: "{{ lab_domain_dn }}" }
+    - { name: "Lab Workstations", path: "{{ lab_domain_dn }}" }
+    - { name: "Lab Users",      path: "{{ lab_domain_dn }}" }
+    - { name: "Service Accounts", path: "{{ lab_domain_dn }}" }
+
+- name: Create lab user accounts
+  community.windows.win_domain_user:
+    name: "{{ item.name }}"
+    firstname: "{{ item.firstname }}"
+    surname: "{{ item.surname }}"
+    password: "{{ lab_password }}"
+    password_never_expires: true
+    state: present
+    path: "OU=Lab Users,{{ lab_domain_dn }}"
+  loop:
+    - { name: jsmith,   firstname: John,   surname: Smith }
+    - { name: mjones,   firstname: Mary,   surname: Jones }
+    - { name: bwilson,  firstname: Bob,    surname: Wilson }
+    - { name: svc_vmm,  firstname: VMM,    surname: Service }
+
+- name: Create DNS reverse lookup zone
+  ansible.windows.win_powershell:
+    script: |
+      $zone = '100.168.192.in-addr.arpa'
+      if (-not (Get-DnsServerZone -Name $zone -ErrorAction SilentlyContinue)) {
+        Add-DnsServerPrimaryZone -NetworkID '192.168.100.0/24' -ReplicationScope Domain
+        Write-Host "Created reverse lookup zone $zone"
+      } else {
+        Write-Host "Reverse zone already exists."
+      }

@@ -1,0 +1,17 @@
+---
+# group_vars/windows.yml — Ansible connection settings for all Windows hosts
+
+# SSH transport — requires OpenSSH server installed by Packer
+ansible_connection: ssh
+ansible_shell_type: powershell
+ansible_user:       Administrator
+ansible_password:   "{{ lab_password }}"
+ansible_port:       22
+
+# Use PowerShell 7 via the SSH subsystem configured in sshd_config
+# ansible_shell_executable is not needed — the Subsystem directive in
+# sshd_config maps 'powershell' to pwsh.exe -sshs
+
+# Disable SSH host key checking for lab bootstrap.
+# After initial run, populate ~/.ssh/known_hosts and re-enable.
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"

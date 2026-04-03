@@ -1,0 +1,25 @@
+## ADLabV2 GitLab CE configuration
+## Managed by Ansible — do not edit manually
+
+external_url '{{ gitlab_external_url }}'
+
+# Disable HTTPS for lab (CA01 can issue certs later)
+nginx['redirect_http_to_https'] = false
+
+# Email (disabled for lab — no SMTP)
+gitlab_rails['smtp_enable'] = false
+
+# Reduce memory footprint for lab VM (8 GB RAM)
+puma['worker_processes'] = 2
+sidekiq['concurrency'] = 5
+postgresql['shared_buffers'] = "256MB"
+prometheus_monitoring['enable'] = false
+grafana['enable'] = false
+alertmanager['enable'] = false
+node_exporter['enable'] = false
+redis_exporter['enable'] = false
+postgres_exporter['enable'] = false
+gitlab_exporter['enable'] = false
+
+# Container registry disabled (lab doesn't need it)
+registry['enable'] = false

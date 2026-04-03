@@ -1,0 +1,65 @@
+---
+# iis/tasks/main.yml
+# Joins domain and installs IIS on WEB01.
+
+- name: Join domain
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Install IIS and management tools
+  ansible.windows.win_feature:
+    name:
+      - Web-Server
+      - Web-Common-Http
+      - Web-Default-Doc
+      - Web-Dir-Browsing
+      - Web-Http-Errors
+      - Web-Static-Content
+      - Web-Http-Logging
+      - Web-Stat-Compression
+      - Web-Filtering
+      - Web-Mgmt-Console
+      - Web-Scripting-Tools
+      - Web-Asp-Net45
+      - Web-Net-Ext45
+      - Web-ISAPI-Ext
+      - Web-ISAPI-Filter
+    state: present
+    include_management_tools: true
+  register: iis_feature
+
+- name: Reboot after IIS install
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+  when: iis_feature.reboot_required
+
+- name: Ensure IIS service is running
+  ansible.windows.win_service:
+    name: W3SVC
+    state: started
+    start_mode: auto
+
+- name: Create lab default page
+  ansible.windows.win_copy:
+    content: |
+      <html><body>
+      <h1>ADLabV2 - WEB01</h1>
+      <p>IIS is running on {{ inventory_hostname }}.{{ lab_domain_name }}</p>
+      </body></html>
+    dest: 'C:\inetpub\wwwroot\index.html'

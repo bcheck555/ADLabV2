@@ -1,0 +1,45 @@
+services:
+  ansible:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: adlabv2-ansible:latest
+    volumes:
+      # Mount the ansible directory as the working directory
+      - ../ansible:/ansible
+      # Mount SSH keys read-only (generated outside container)
+      - ${USERPROFILE}/.ssh:/root/.ssh:ro
+    environment:
+      - ANSIBLE_HOST_KEY_CHECKING=False
+      - ANSIBLE_STDOUT_CALLBACK=yaml
+      - ANSIBLE_RETRY_FILES_ENABLED=False
+      # Uncomment and set if using ansible-vault:
+      # - ANSIBLE_VAULT_PASSWORD_FILE=/ansible/.vault_pass
+    # network_mode: host is NOT supported on Windows Docker Desktop.
+    # Instead, add a Windows route so the container can reach 192.168.100.0/24:
+    #
+    #   $gw = (Get-NetIPAddress -InterfaceAlias "vEthernet (DockerNAT)" -AddressFamily IPv4).IPAddress
+    #   route add 192.168.100.0 MASK 255.255.255.0 $gw
+    #
+    # This is documented in README.md under "Network Routing".
+    # The route persists until host reboot; add -p flag or a startup task to persist it.
+
+# Usage examples:
+#
+# Build the image:
+#   docker-compose build
+#
+# Run full playbook:
+#   docker-compose run ansible ansible-playbook site.yml
+#
+# Run single host:
+#   docker-compose run ansible ansible-playbook site.yml --limit dc01
+#
+# Run with tags:
+#   docker-compose run ansible ansible-playbook site.yml --tags ad
+#
+# Ad-hoc ping all hosts:
+#   docker-compose run --entrypoint ansible ansible all -m ping
+#
+# Interactive shell in container:
+#   docker-compose run --entrypoint bash ansible

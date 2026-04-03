@@ -1,0 +1,25 @@
+---
+# group_vars/all.yml — Variables shared across all hosts
+# Credentials should be encrypted with ansible-vault in production.
+# Run: ansible-vault encrypt_string 'P@ssw0rd!Lab1' --name 'lab_password'
+
+# === Domain ===
+lab_domain_name:    lab.local
+lab_domain_netbios: LAB
+lab_domain_dn:      DC=lab,DC=local
+lab_dsrm_password:  "P@ssw0rd!DSRM1"   # VAULT THIS
+
+# === Network ===
+lab_gateway:     192.168.100.1
+lab_dns1:        192.168.100.10   # DC01
+lab_dns2:        192.168.100.11   # DC02
+lab_subnet_mask: 255.255.255.0
+lab_prefix_len:  24
+
+# === Common credentials (lab only) ===
+lab_password: "P@ssw0rd!Lab1"   # VAULT THIS
+
+# === GitLab ===
+gitlab_external_url: "http://192.168.100.5"
+gitlab_version:      "17.6.1"   # Pin to a specific CE release
+gitlab_root_password: "P@ssw0rd!Lab1"   # VAULT THIS

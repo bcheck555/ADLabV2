@@ -1,0 +1,94 @@
+---
+# scvmm/tasks/main.yml
+# Joins domain and installs SCVMM 2025 on VMM01.
+# SCVMM requires SQL Server — DB01 must be configured first.
+# VMM01 needs nested virtualization enabled (set in terraform/vms.tf).
+
+- name: Join domain
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Install SCVMM prerequisites (ADK)
+  ansible.windows.win_powershell:
+    script: |
+      $adkLayout = '{{ scvmm_adk_path | default("D:\\LabSources\\ADK") }}'
+      if (-not (Test-Path $adkLayout)) {
+        throw "ADK offline layout not found at $adkLayout. Run adksetup.exe /layout first."
+      }
+      $adkSetup = Join-Path $adkLayout 'adksetup.exe'
+      $result = Start-Process $adkSetup `
+        -ArgumentList '/quiet /features OptionId.DeploymentTools' `
+        -Wait -PassThru
+      if ($result.ExitCode -notin @(0, 3010)) {
+        throw "ADK install failed: $($result.ExitCode)"
+      }
+
+- name: Extract SCVMM zip
+  ansible.windows.win_powershell:
+    script: |
+      $zip  = '{{ scvmm_zip_path | default("D:\\LabSources\\SCVMM_2025.zip") }}'
+      $dest = 'C:\LabSetup\SCVMM'
+      if (-not (Test-Path $dest)) {
+        Expand-Archive -Path $zip -DestinationPath $dest -Force
+        Write-Host "Extracted SCVMM."
+        $Ansible.Changed = $true
+      }
+
+- name: Install SCVMM server
+  ansible.windows.win_powershell:
+    script: |
+      $setup = 'C:\LabSetup\SCVMM\setup.exe'
+      if (-not (Test-Path $setup)) { throw "SCVMM setup.exe not found." }
+
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $iniContent = @"
+[OPTIONS]
+ProductKey=
+UserName=Lab Admin
+CompanyName=ADLabV2
+ProgramFiles=C:\Program Files\Microsoft System Center\Virtual Machine Manager
+CreateNewSqlDatabase=1
+SqlInstanceName=MSSQLSERVER
+SqlDatabaseName=VirtualManagerDB
+RemoteDatabaseImpersonation=0
+SqlMachineName=DB01.{{ lab_domain_name }}
+IndigoTcpPort=8100
+IndigoHTTPSPort=8101
+IndigoHTTPPort=8102
+IndigoNETTCPPort=8103
+WSManTcpPort=5985
+BitsTcpPort=443
+SQMOptIn=0
+MUOptIn=0
+VmmServiceLocalAccount=0
+HighlyAvailableVMM=0
+VmmServiceDomain={{ lab_domain_netbios }}
+VmmServiceUserName=svc_vmm
+VmmServiceUserPassword={{ lab_password }}
+"@
+      $iniPath = 'C:\LabSetup\scvmm_unattend.ini'
+      $iniContent | Set-Content $iniPath -Force -Encoding ASCII
+
+      $result = Start-Process $setup `
+        -ArgumentList "/server /i /f $iniPath /VmmServiceAccountPassword {{ lab_password }}" `
+        -Wait -PassThru -WorkingDirectory 'C:\LabSetup\SCVMM'
+      if ($result.ExitCode -notin @(0, 3010)) {
+        throw "SCVMM install failed: $($result.ExitCode)"
+      }
+      $Ansible.Changed = $true

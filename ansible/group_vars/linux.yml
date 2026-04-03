@@ -1,0 +1,15 @@
+---
+# group_vars/linux.yml — Ansible connection settings for Linux hosts (GIT01)
+
+ansible_connection: ssh
+ansible_user:       labadmin
+ansible_password:   "{{ lab_password }}"
+ansible_port:       22
+ansible_python_interpreter: /usr/bin/python3
+
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+# labadmin has passwordless sudo (set by Packer cloud-init)
+ansible_become:           true
+ansible_become_method:    sudo
+ansible_become_password:  ""

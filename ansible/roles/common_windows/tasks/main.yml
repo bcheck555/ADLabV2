@@ -1,0 +1,34 @@
+---
+# common_windows/tasks/main.yml
+# Minimal post-boot configuration for all Windows VMs.
+# Most baseline config was applied by Packer. This role handles
+# static IP assignment and hostname — things that must happen per-instance.
+
+- name: Set static IP address
+  ansible.windows.win_powershell:
+    script: |
+      $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+      $current = Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
+      if ($current.IPAddress -ne '{{ ansible_host }}') {
+        Remove-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
+        Remove-NetRoute -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
+        New-NetIPAddress -InterfaceIndex $adapter.ifIndex `
+          -IPAddress '{{ ansible_host }}' `
+          -PrefixLength {{ lab_prefix_len }} `
+          -DefaultGateway '{{ lab_gateway }}'
+        Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex `
+          -ServerAddresses @('{{ lab_dns1 }}', '{{ lab_dns2 }}')
+        Write-Host "IP set to {{ ansible_host }}"
+      } else {
+        Write-Host "IP already {{ ansible_host }}, skipping."
+      }
+
+- name: Set computer name
+  ansible.windows.win_hostname:
+    name: "{{ inventory_hostname | upper }}"
+  register: hostname_result
+
+- name: Reboot if hostname changed
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+  when: hostname_result.reboot_required

@@ -1,0 +1,48 @@
+---
+# secondary_dc/tasks/main.yml
+# Promotes DC02 as an additional domain controller in lab.local.
+
+- name: Install AD DS and DNS features
+  ansible.windows.win_feature:
+    name:
+      - AD-Domain-Services
+      - DNS
+      - RSAT-AD-Tools
+    state: present
+    include_management_tools: true
+  register: ad_feature
+
+- name: Reboot after feature install if required
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+  when: ad_feature.reboot_required
+
+- name: Check if already a domain controller
+  ansible.windows.win_powershell:
+    script: |
+      $ntds = Get-Service NTDS -ErrorAction SilentlyContinue
+      $Ansible.Result = ($null -ne $ntds)
+  register: is_dc
+
+- name: Promote as additional domain controller
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $dsrmPass   = ConvertTo-SecureString '{{ lab_dsrm_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+
+      Import-Module ADDSDeployment
+      Install-ADDSDomainController `
+        -DomainName '{{ lab_domain_name }}' `
+        -Credential $domainCred `
+        -SafeModeAdministratorPassword $dsrmPass `
+        -InstallDns `
+        -NoRebootOnCompletion `
+        -Force
+  when: not is_dc.result
+
+- name: Reboot to complete promotion
+  ansible.windows.win_reboot:
+    reboot_timeout: 600
+    post_reboot_delay: 60
+  when: not is_dc.result

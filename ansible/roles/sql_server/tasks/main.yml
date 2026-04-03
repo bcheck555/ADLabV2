@@ -1,0 +1,94 @@
+---
+# sql_server/tasks/main.yml
+# Joins domain and installs SQL Server 2022 Developer Edition on DB01.
+
+- name: Join domain
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Copy SQL Server ISO to VM
+  ansible.windows.win_copy:
+    src: "{{ sql_iso_local_path | default('') }}"
+    dest: 'C:\LabSetup\sql2022.iso'
+  when: sql_iso_local_path is defined
+
+- name: Mount SQL Server ISO
+  ansible.windows.win_powershell:
+    script: |
+      $iso = 'C:\LabSetup\sql2022.iso'
+      if (-not (Test-Path $iso)) {
+        throw "SQL ISO not found at $iso. Copy it manually or set sql_iso_local_path."
+      }
+      $mount = Mount-DiskImage -ImagePath $iso -PassThru
+      $drive = ($mount | Get-Volume).DriveLetter
+      $Ansible.Result = "${drive}:"
+  register: sql_drive
+
+- name: Install SQL Server 2022 (unattended)
+  ansible.windows.win_powershell:
+    script: |
+      $drive     = '{{ sql_drive.result }}'
+      $saPass    = '{{ sql_sa_password | default(lab_password) }}'
+      $svcAcct   = '{{ lab_domain_netbios }}\svc_vmm'   # reuse service account for lab
+
+      $args = @(
+        '/Q'
+        '/ACTION=Install'
+        '/FEATURES=SQLENGINE,FULLTEXT,CONN,SSMS'
+        '/INSTANCENAME=MSSQLSERVER'
+        "/SQLSYSADMINACCOUNTS={{ lab_domain_netbios }}\Domain Admins"
+        '/SECURITYMODE=SQL'
+        "/SAPWD=$saPass"
+        '/TCPENABLED=1'
+        '/BROWSERSVCSTARTUPTYPE=Automatic'
+        '/IACCEPTSQLSERVERLICENSETERMS'
+        '/UpdateEnabled=0'
+      )
+
+      $result = Start-Process -FilePath "${drive}\setup.exe" `
+        -ArgumentList $args -Wait -PassThru -WorkingDirectory $drive
+      if ($result.ExitCode -notin @(0, 3010)) {
+        throw "SQL Server install failed with exit code $($result.ExitCode)"
+      }
+      $Ansible.Changed = $true
+  register: sql_install
+
+- name: Enable SQL Server TCP/IP
+  ansible.windows.win_powershell:
+    script: |
+      [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SqlWmiManagement') | Out-Null
+      $wmi      = New-Object Microsoft.SqlServer.Management.Smo.Wmi.ManagedComputer
+      $instance = $wmi.ServerInstances['MSSQLSERVER']
+      $tcp      = $instance.ServerProtocols['Tcp']
+      if (-not $tcp.IsEnabled) {
+        $tcp.IsEnabled = $true
+        $tcp.Alter()
+        Restart-Service MSSQLSERVER -Force
+        Write-Host "TCP enabled."
+      }
+
+- name: Open SQL Server firewall port
+  ansible.windows.win_firewall_rule:
+    name: SQL Server
+    localport: 1433
+    action: allow
+    direction: in
+    protocol: tcp
+    state: present
+    enabled: true

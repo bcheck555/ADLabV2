@@ -1,0 +1,14 @@
+---
+# gitlab.yml — Standalone playbook to configure GIT01 only.
+# Use this during bootstrap before the full site.yml run.
+#
+# Usage:
+#   docker-compose -f docker/docker-compose.yml run ansible \
+#     ansible-playbook gitlab.yml
+
+- name: Configure GIT01 (GitLab CE)
+  hosts: git01
+  gather_facts: true
+  roles:
+    - common_linux
+    - gitlab
