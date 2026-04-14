@@ -26,7 +26,7 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
         <!-- Enable Administrator account before OOBE starts on deployed VMs -->
         <RunSynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <CommandLine>net user Administrator /active:yes</CommandLine>
+          <Path>net user Administrator /active:yes</Path>
         </RunSynchronousCommand>
       </RunSynchronous>
     </component>
