@@ -1,15 +1,21 @@
 # ADLabV2 GitLab CI/CD Pipeline
 #
-# Prerequisites:
-#   1. GitLab Runner installed on the Hyper-V host (shell executor, PowerShell)
-#   2. Runner registered with GIT01's GitLab instance
-#   3. CI/CD variables set in GitLab (Settings → CI/CD → Variables):
-#      - LAB_HOST_PASSWORD  (masked) — Hyper-V host admin password
-#      - LAB_PASSWORD       (masked) — Lab VM local/domain admin password
-#      - ANSIBLE_VAULT_PASS (masked, file) — Vault password if using vault
+# Runner architecture:
+#   - hyperv-host  Shell executor (PowerShell) on the Hyper-V host
+#                  Required for Packer (Hyper-V API) and OpenTofu
+#   - git01        Docker executor on GIT01 (192.168.100.5)
+#                  Used for Ansible — runs adlabv2-ansible image, full
+#                  network access to all lab VMs via host networking
 #
-# Bootstrap note: This pipeline runs AFTER GitLab is up. The first run
-# of GIT01 + DC01 must be done manually via Build-Lab.ps1.
+# CI/CD variables (Settings → CI/CD → Variables):
+#   - LAB_HOST_PASSWORD   (masked)       — Hyper-V host admin password
+#   - LAB_PASSWORD        (masked)       — Lab VM local/domain admin password
+#   - SSH_PRIVATE_KEY     (masked, file) — labadmin private key from GIT01
+#                                          (/home/labadmin/.ssh/id_ed25519)
+#   - ANSIBLE_VAULT_PASS  (masked, file) — Vault password (if using vault)
+#
+# Bootstrap note: This pipeline runs AFTER GitLab is up and the git01 runner
+# is registered. Initial GIT01 setup is done manually via Build-Lab.ps1.
 
 stages:
   - packer
@@ -97,26 +103,60 @@ terraform:destroy:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # ── Ansible stages ────────────────────────────────────────────────────────────
+# These jobs run on GIT01 using the Docker executor.
+# The adlabv2-ansible image must be pre-built on GIT01:
+#   docker compose -f docker/docker-compose.yml build
+#
+# The runner config on GIT01 (/etc/gitlab-runner/config.toml) must set:
+#   [runners.docker]
+#     network_mode = "host"   # gives the container direct LabSwitch access
+#     volumes = ["/cache"]
+
+.ansible_defaults: &ansible_defaults
+  stage: ansible
+  tags: [git01]
+  image: adlabv2-ansible:latest
+  variables:
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+    ANSIBLE_STDOUT_CALLBACK: yaml
+    GIT_STRATEGY: clone
+  before_script:
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
 
 ansible:deploy:
-  stage: ansible
-  tags: [hyperv-host]
+  <<: *ansible_defaults
   script:
-    - docker-compose -f docker/docker-compose.yml build
-    - docker-compose -f docker/docker-compose.yml run --rm ansible
-        ansible-playbook site.yml
-        -e "lab_password=$env:LAB_PASSWORD"
+    - ansible-playbook ansible/site.yml -e "lab_password=$LAB_PASSWORD"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
 
-ansible:ping:
-  stage: ansible
-  tags: [hyperv-host]
+# Workstation-only run — checks VM power state on hvhost first, then
+# configures WKS01/WKS02. Safe to re-run; handles licensing rearm reboots.
+ansible:deploy-workstations:
+  <<: *ansible_defaults
   script:
-    - docker-compose -f docker/docker-compose.yml run --rm
-        --entrypoint ansible ansible
-        all -m ping
-        -e "lab_password=$env:LAB_PASSWORD"
+    - ansible-playbook ansible/site.yml --tags workstations -e "lab_password=$LAB_PASSWORD"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+    - when: manual
+
+ansible:deploy-limit:
+  <<: *ansible_defaults
+  script:
+    - ansible-playbook ansible/site.yml --limit "$ANSIBLE_LIMIT" --tags "$ANSIBLE_TAGS"
+        -e "lab_password=$LAB_PASSWORD"
+  variables:
+    ANSIBLE_LIMIT: all
+    ANSIBLE_TAGS: ""
+  rules:
+    - when: manual
+
+ansible:ping:
+  <<: *ansible_defaults
+  script:
+    - ansible -i ansible/inventory/hosts.yml all -m ping -e "lab_password=$LAB_PASSWORD"
   rules:
     - when: manual

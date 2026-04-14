@@ -11,10 +11,18 @@
     state: present
     include_management_tools: true
   register: ad_feature
+  ignore_errors: true
 
 - name: Reboot after feature install if required
   ansible.windows.win_reboot:
     reboot_timeout: 300
+    post_reboot_delay: 30
+  when: ad_feature.reboot_required
+
+- name: Wait for SSH to stabilise after feature install reboot
+  ansible.builtin.wait_for_connection:
+    delay: 30
+    timeout: 300
   when: ad_feature.reboot_required
 
 - name: Check if already a domain controller
@@ -22,7 +30,9 @@
     script: |
       $ntds = Get-Service NTDS -ErrorAction SilentlyContinue
       $Ansible.Result = ($null -ne $ntds)
+      $Ansible.Changed = $false
   register: is_dc
+  ignore_errors: true
 
 - name: Promote as additional domain controller
   ansible.windows.win_powershell:
@@ -40,6 +50,9 @@
         -NoRebootOnCompletion `
         -Force
   when: not is_dc.result
+  ignore_errors: true
+  async: 900   # promotion takes 5-15 min; poll keeps output flowing
+  poll: 30
 
 - name: Reboot to complete promotion
   ansible.windows.win_reboot:

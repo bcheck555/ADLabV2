@@ -1,85 +1,140 @@
 ---
-# ADLabV2 Master Playbook
-# Run order matters: GIT01 first, DC01 next (forest root), then all dependents.
-# Use --limit <host> to run a single VM. Use tags to run subsets.
-#
-# Full run:
-#   docker-compose -f docker/docker-compose.yml run ansible ansible-playbook site.yml
+# ADLabV2 Master Playbook — domain infrastructure only (git01 excluded).
+# GIT01 is bootstrapped separately via gitlab.yml (Build-Lab.ps1 -GitLabOnly).
+# After GIT01 is up, site.yml runs from GIT01 via GitLab CI.
 #
 # Single VM:
-#   docker-compose -f docker/docker-compose.yml run ansible \
-#     ansible-playbook site.yml --limit dc01
+#   ansible-playbook site.yml --limit dc01
 #
 # Skip already-done phases (idempotent, but faster):
 #   ansible-playbook site.yml --skip-tags domain_join
-
-# ── 0. GitLab CE (outside domain, no dependencies) ──────────────────────────
-- name: Configure GIT01 (GitLab CE)
-  hosts: git01
-  gather_facts: true
-  roles:
-    - common_linux
-    - gitlab
-  tags: [git01, gitlab]
 
 # ── 1. Primary Domain Controller ─────────────────────────────────────────────
 - name: Configure DC01 (Primary DC, forest root)
   hosts: dc01
   gather_facts: false
+  pre_tasks:
+    - name: Wait for connection
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        sleep: 10
+      register: _conn
+      ignore_unreachable: true
+
+    - name: Skip unreachable host
+      ansible.builtin.meta: end_host
+      when: _conn.unreachable | default(false)
   roles:
     - common_windows
     - domain_controller
   tags: [dc01, ad, dns]
 
-# ── 2. Secondary Domain Controller ───────────────────────────────────────────
-- name: Configure DC02 (Additional DC)
-  hosts: dc02
+# ── 2-5. Domain member servers (parallel — all depend only on DC01 being up) ──
+- name: Configure domain member servers (DC02, CA01, DB01, WEB01)
+  hosts: dc02:ca01:db01:web01
   gather_facts: false
+  strategy: linear
+  pre_tasks:
+    - name: Wait for connection
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        sleep: 10
+      register: _conn
+      ignore_unreachable: true
+
+    - name: Skip unreachable host
+      ansible.builtin.meta: end_host
+      when: _conn.unreachable | default(false)
   roles:
     - common_windows
-    - secondary_dc
-  tags: [dc02, ad]
+    - role: secondary_dc
+      when: inventory_hostname == 'dc02'
+    - role: certificate_authority
+      when: inventory_hostname == 'ca01'
+    - role: sql_server
+      when: inventory_hostname == 'db01'
+    - role: iis
+      when: inventory_hostname == 'web01'
+  tags: [dc02, ca01, db01, web01, ad, pki, sql, iis]
 
-# ── 3. Enterprise CA ─────────────────────────────────────────────────────────
-- name: Configure CA01 (Enterprise Root CA)
-  hosts: ca01
+# ── 6. Ensure workstations are running before configuration ───────────────────
+# Win11 evaluation licensing can trigger rearming reboots / shutdowns during
+# the first Ansible pass. This play runs on the Hyper-V host and guarantees
+# WKS01 and WKS02 are in a Running state before we attempt to configure them.
+- name: Ensure workstation VMs are running on Hyper-V host
+  hosts: all
   gather_facts: false
-  roles:
-    - common_windows
-    - certificate_authority
-  tags: [ca01, pki]
+  tasks:
+    - name: Check and start workstation VMs if not running
+      ansible.builtin.raw: |
+        $workstations = @('WKS01', 'WKS02')
+        $started = @()
+        foreach ($vmName in $workstations) {
+          $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+          if (-not $vm) {
+            Write-Host "SKIP: $vmName not found on this host"
+            continue
+          }
+          if ($vm.State -eq 'Running') {
+            Write-Host "OK: $vmName is already Running"
+          } else {
+            Write-Host "START: $vmName is '$($vm.State)' — starting now..."
+            Start-VM -Name $vmName
+            $started += $vmName
+            Write-Host "STARTED: $vmName"
+          }
+        }
+        if ($started.Count -gt 0) {
+          Write-Host "Waiting 90 seconds for VMs to boot SSH: $($started -join ', ')"
+          Start-Sleep -Seconds 90
+        }
+      delegate_to: hvhost
+      run_once: true
+      register: wks_boot_check
+      changed_when: "'STARTED:' in wks_boot_check.stdout"
 
-# ── 4. SQL Server ────────────────────────────────────────────────────────────
-- name: Configure DB01 (SQL Server 2022)
-  hosts: db01
-  gather_facts: false
-  roles:
-    - common_windows
-    - sql_server
-  tags: [db01, sql]
+    - name: Show VM boot check output
+      ansible.builtin.debug:
+        var: wks_boot_check.stdout_lines
+  tags: [workstations, wks]
 
-# ── 5. IIS Web Server ────────────────────────────────────────────────────────
-- name: Configure WEB01 (IIS)
-  hosts: web01
-  gather_facts: false
-  roles:
-    - common_windows
-    - iis
-  tags: [web01, iis]
-
-# ── 6. Workstations ──────────────────────────────────────────────────────────
+# ── 7. Configure workstations (Win11) ────────────────────────────────────────
+# Runs after servers are fully configured and workstations are confirmed running.
+# Handles Win11 licensing rearm, domain join, and baseline config.
 - name: Configure workstations (WKS01, WKS02)
   hosts: workstations
   gather_facts: false
+  pre_tasks:
+    - name: Wait for SSH connection
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        sleep: 15
+      register: _conn
+      ignore_unreachable: true
+
+    - name: Skip unreachable workstation
+      ansible.builtin.meta: end_host
+      when: _conn.unreachable | default(false)
   roles:
     - common_windows
     - workstation
   tags: [workstations, wks]
 
-# ── 7. SCVMM (last — depends on domain + SQL) ────────────────────────────────
+# ── 8. SCVMM (last — depends on domain + SQL) ────────────────────────────────
 - name: Configure VMM01 (SCVMM 2025)
   hosts: vmm01
   gather_facts: false
+  pre_tasks:
+    - name: Wait for connection
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        sleep: 10
+      register: _conn
+      ignore_unreachable: true
+
+    - name: Skip unreachable host
+      ansible.builtin.meta: end_host
+      when: _conn.unreachable | default(false)
   roles:
     - common_windows
     - scvmm

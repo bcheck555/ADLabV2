@@ -75,6 +75,6 @@ Restart-Service sshd
 New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' `
     -DisplayName 'OpenSSH Server (sshd)' `
     -Direction Inbound -Protocol TCP -LocalPort 22 `
-    -Action Allow -Profile Any -Force | Out-Null
+    -Action Allow -Profile Any | Out-Null
 
 Write-Host '=== 02-configure: Complete ==='

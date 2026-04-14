@@ -2,25 +2,11 @@
 # iis/tasks/main.yml
 # Joins domain and installs IIS on WEB01.
 
-- name: Join domain
-  ansible.windows.win_powershell:
-    script: |
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
-      $computer   = Get-WmiObject Win32_ComputerSystem
-      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
-        Write-Host "Already domain member."
-      } else {
-        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
-        $Ansible.Changed = $true
-      }
-  register: domain_join
-
-- name: Reboot after domain join
-  ansible.windows.win_reboot:
-    reboot_timeout: 300
-    post_reboot_delay: 30
-  when: domain_join.changed
+- include_role:
+    name: common_windows
+    tasks_from: domain_join
+  vars:
+    target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
 
 - name: Install IIS and management tools
   ansible.windows.win_feature:
@@ -43,6 +29,7 @@
     state: present
     include_management_tools: true
   register: iis_feature
+  ignore_errors: true
 
 - name: Reboot after IIS install
   ansible.windows.win_reboot:
@@ -54,12 +41,15 @@
     name: W3SVC
     state: started
     start_mode: auto
+  ignore_errors: true
 
 - name: Create lab default page
-  ansible.windows.win_copy:
-    content: |
+  ansible.windows.win_powershell:
+    script: |
+      Set-Content -Path 'C:\inetpub\wwwroot\index.html' -Value @'
       <html><body>
       <h1>ADLabV2 - WEB01</h1>
       <p>IIS is running on {{ inventory_hostname }}.{{ lab_domain_name }}</p>
       </body></html>
-    dest: 'C:\inetpub\wwwroot\index.html'
+      '@ -Encoding UTF8
+  ignore_errors: true

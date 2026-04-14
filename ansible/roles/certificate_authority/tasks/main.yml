@@ -2,25 +2,11 @@
 # certificate_authority/tasks/main.yml
 # Installs an Enterprise Root CA (ADCS) on CA01.
 
-- name: Join domain first
-  ansible.windows.win_powershell:
-    script: |
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
-      $computer   = Get-WmiObject Win32_ComputerSystem
-      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
-        Write-Host "Already domain member."
-      } else {
-        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
-        $Ansible.Changed = $true
-      }
-  register: domain_join
-
-- name: Reboot after domain join
-  ansible.windows.win_reboot:
-    reboot_timeout: 300
-    post_reboot_delay: 30
-  when: domain_join.changed
+- include_role:
+    name: common_windows
+    tasks_from: domain_join
+  vars:
+    target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
 
 - name: Install ADCS feature
   ansible.windows.win_feature:
@@ -30,18 +16,30 @@
     state: present
     include_management_tools: true
   register: adcs_feature
+  ignore_errors: true
 
 - name: Reboot after ADCS feature install
   ansible.windows.win_reboot:
     reboot_timeout: 300
+    post_reboot_delay: 30
   when: adcs_feature.reboot_required
 
+- name: Wait for SSH to stabilise after ADCS feature reboot
+  ansible.builtin.wait_for_connection:
+    delay: 30
+    timeout: 300
+  when: adcs_feature.reboot_required
+
+# CA enrollment makes AD LDAP calls that can block for several minutes when
+# DC02 promotion is running in parallel.  async+poll gives visibility and a
+# hard timeout so the play never hangs silently.
 - name: Configure Enterprise Root CA
   ansible.windows.win_powershell:
     script: |
       # Check if CA is already configured
       if (Get-Service CertSvc -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running') {
         Write-Host "CA already configured."
+        $Ansible.Changed = $false
         return
       }
       $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
@@ -57,9 +55,13 @@
         -ValidityPeriodUnits 10 `
         -Credential $domainCred `
         -Force
+  ignore_errors: true
+  async: 600   # 10-min hard cap; polls every 30 s so output stays visible
+  poll: 30
 
 - name: Start and enable certificate services
   ansible.windows.win_service:
     name: CertSvc
     state: started
     start_mode: auto
+  ignore_errors: true

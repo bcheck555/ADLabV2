@@ -32,39 +32,42 @@ $cortanaKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
 New-Item $cortanaKey -Force | Out-Null
 Set-ItemProperty $cortanaKey AllowCortana 0
 
-# --- PowerShell 7 ---
+# --- PowerShell 7 (from UNATTEND CD) ---
 Write-Host 'Installing PowerShell 7...'
-try {
-    $ps7Msi = 'C:\Windows\Temp\pwsh7.msi'
-    $ps7Url = 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi'
-    (New-Object System.Net.WebClient).DownloadFile($ps7Url, $ps7Msi)
-    Start-Process msiexec.exe -ArgumentList "/i $ps7Msi /quiet /norestart" -Wait
-    Remove-Item $ps7Msi -Force -ErrorAction SilentlyContinue
+$cdDrive = (Get-Volume -FileSystemLabel 'UNATTEND' -ErrorAction SilentlyContinue).DriveLetter
+$ps7Msi  = if ($cdDrive) { "${cdDrive}:\PowerShell-7.6.0-win-x64.msi" } else { $null }
+if ($ps7Msi -and (Test-Path $ps7Msi)) {
+    Start-Process msiexec.exe -ArgumentList "/i `"$ps7Msi`" /quiet /norestart" -Wait
     Write-Host 'PowerShell 7 installed.'
-} catch {
-    Write-Warning "PS7 download failed: $_. Ansible will fall back to Windows PowerShell 5.1."
+} else {
+    Write-Warning 'PS7 MSI not found on UNATTEND CD. Ansible will fall back to Windows PowerShell 5.1.'
 }
 
-# --- OpenSSH Server ---
-Write-Host 'Installing OpenSSH Server...'
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-Start-Service sshd
+# --- OpenSSH Server (already installed via MSI in autounattend) ---
+# Just ensure the service is running
+Start-Service sshd -ErrorAction SilentlyContinue
 Set-Service sshd -StartupType Automatic
 
-$sshdConfig = @'
+# Build sshd_config — use PS7 subsystem if available, otherwise PS5.1
+$subsystem = if (Test-Path 'C:\Program Files\PowerShell\7\pwsh.exe') {
+    'Subsystem powershell "c:/program files/powershell/7/pwsh.exe" -sshs -nologo'
+} else {
+    'Subsystem powershell c:/windows/system32/windowspowershell/v1.0/powershell.exe -sshs -nologo'
+}
+$sshdConfig = @"
 # ADLabV2 sshd_config — managed by Packer
 Port 22
 PasswordAuthentication yes
 PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
-Subsystem powershell c:/progra~1/powershell/7/pwsh.exe -sshs -nologo
-'@
+$subsystem
+"@
 Set-Content 'C:\ProgramData\ssh\sshd_config' $sshdConfig -Force -Encoding UTF8
 Restart-Service sshd
 
 New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' `
     -DisplayName 'OpenSSH Server (sshd)' `
     -Direction Inbound -Protocol TCP -LocalPort 22 `
-    -Action Allow -Profile Any -Force | Out-Null
+    -Action Allow -Profile Any | Out-Null
 
 Write-Host '=== 02-configure (Win11): Complete ==='

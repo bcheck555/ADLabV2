@@ -56,6 +56,13 @@
       </DiskConfiguration>
       <ImageInstall>
         <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <!-- Index 2 = Windows Server 2025 Standard Evaluation (Desktop Experience) -->
+              <Key>/IMAGE/INDEX</Key>
+              <Value>2</Value>
+            </MetaData>
+          </InstallFrom>
           <InstallTo>
             <DiskID>0</DiskID>
             <PartitionID>3</PartitionID>
@@ -65,6 +72,11 @@
       </ImageInstall>
       <UserData>
         <AcceptEula>true</AcceptEula>
+        <!-- Eval edition key for WS2025 Standard -->
+        <ProductKey>
+          <Key>TVRH9-TDFSF-MBHKF-9G4MM-HMYK9</Key>
+          <WillShowUI>Never</WillShowUI>
+        </ProductKey>
       </UserData>
     </component>
   </settings>
@@ -83,6 +95,20 @@
                language="neutral" versionScope="nonSxS">
       <fDenyTSConnections>false</fDenyTSConnections>
     </component>
+    <!-- Set static IP so Packer can SSH in (PackerSwitch has no DHCP) -->
+    <component name="Microsoft-Windows-Deployment"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Set static IP (PackerSwitch has no DHCP)</Description>
+          <Path>powershell.exe -Command "$a = Get-NetAdapter | Where-Object Status -eq Up | Select-Object -First 1; if ($a) { New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress 10.0.0.2 -PrefixLength 24 -DefaultGateway 10.0.0.1 -ErrorAction SilentlyContinue }"</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
   </settings>
   <settings pass="oobeSystem">
     <component name="Microsoft-Windows-Shell-Setup"
@@ -96,23 +122,27 @@
         <Username>Administrator</Username>
       </AutoLogon>
       <FirstLogonCommands>
-        <!-- Enable WinRM for Packer communicator -->
+        <!-- Install OpenSSH Server for Packer communicator -->
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <CommandLine>cmd /c winrm quickconfig -q</CommandLine>
+          <CommandLine>powershell -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"</CommandLine>
           <RequiresUserInput>false</RequiresUserInput>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>2</Order>
-          <CommandLine>cmd /c winrm set winrm/config/service @{AllowUnencrypted="true"}</CommandLine>
+          <CommandLine>powershell -Command "Set-Service sshd -StartupType Automatic"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>3</Order>
-          <CommandLine>cmd /c winrm set winrm/config/service/auth @{Basic="true"}</CommandLine>
+          <CommandLine>powershell -Command "Start-Service sshd"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>4</Order>
-          <CommandLine>cmd /c netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
+          <CommandLine>powershell -Command "New-NetFirewallRule -Name 'sshd' -DisplayName 'OpenSSH Server' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>5</Order>
+          <CommandLine>powershell -Command "New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force"</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
       <OOBE>

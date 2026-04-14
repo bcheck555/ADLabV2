@@ -1,16 +1,16 @@
 #Requires -RunAsAdministrator
-# Build-Lab.ps1 - ADLabV2 orchestrator (host-side bootstrap only)
-# Runs: OpenTofu (create VMs) -> Docker Ansible (configure VMs)
+# Build-Lab.ps1 — ADLabV2 orchestrator (host-side bootstrap only)
+# Runs: OpenTofu (create VMs) → Docker Ansible (configure VMs)
 #
 # NOTE: This script is used for the INITIAL bootstrap only.
 #   After GIT01 is up with Docker + GitLab Runner, all future runs happen
-#   via GitLab CI (ansible runs in Docker on GIT01 - no host Docker needed).
+#   via GitLab CI (ansible runs in Docker on GIT01 — no host Docker needed).
 #
 # Prerequisites:
 #   - Packer base images already built (run packer build manually for each image type)
 #   - LabSwitch Hyper-V switch exists (run New-VMSwitch -Name LabSwitch -SwitchType Internal first)
 #   - tofu.exe in PATH
-#   - Docker Desktop running (bootstrap only - GIT01 takes over after first run)
+#   - Docker Desktop running (bootstrap only — GIT01 takes over after first run)
 #   - terraform/terraform.tfvars populated with host_password
 #   - For Docker to reach lab VMs: add a route manually if needed:
 #       $gw = (Get-NetIPAddress -InterfaceAlias 'vEthernet (DockerNAT)' -AddressFamily IPv4).IPAddress
@@ -85,7 +85,7 @@ if (-not $SkipNetworkBootstrap) {
             Write-Host "Host vNIC already $($cfg.GatewayIP)"
         }
     } else {
-        Write-Warning "vEthernet ($($cfg.SwitchName)) not found - skipping host vNIC config"
+        Write-Warning "vEthernet ($($cfg.SwitchName)) not found — skipping host vNIC config"
     }
 
     $ws2025Cred = New-Object PSCredential(
@@ -93,7 +93,7 @@ if (-not $SkipNetworkBootstrap) {
         (ConvertTo-SecureString $cfg.LocalAdminPass -AsPlainText -Force)
     )
     $win11Cred = New-Object PSCredential(
-        $cfg.LocalAdminUser,   # Use Administrator for Win11 as well
+        $cfg.LinuxUser,   # Win11 Packer image creates 'labadmin', not Administrator
         (ConvertTo-SecureString $cfg.LocalAdminPass -AsPlainText -Force)
     )
 
@@ -170,11 +170,6 @@ if (-not $SkipAnsible) {
         & docker-compose @ansibleArgs
         if ($LASTEXITCODE -eq 4) {
             Write-Warning "Ansible finished with unreachable hosts (exit 4). See PLAY RECAP above for per-host status."
-        } elseif ($LASTEXITCODE -eq 2) {
-            # ansible-core returns 2 when hosts are rescued via meta:end_host
-            # in a rescue block — the internal failure state isn't fully cleared
-            # even though PLAY RECAP shows failed=0. Treat as a warning.
-            Write-Warning "Ansible exited with code 2 (rescued/skipped hosts). Check PLAY RECAP — if failed=0 for all hosts, this is safe to ignore."
         } elseif ($LASTEXITCODE -ne 0) {
             throw "Ansible playbook failed with exit code $LASTEXITCODE"
         }

@@ -1,0 +1,10 @@
+---
+# group_vars/hyperv.yml — Connection settings for the Hyper-V host
+# Used by tasks delegated to hvhost (e.g. attaching ISOs via Set-VMDvdDrive)
+
+ansible_connection:        winrm
+ansible_shell_type:        powershell
+ansible_port:              5985
+ansible_user:              Administrator
+ansible_password:          "{{ lab_password }}"
+ansible_winrm_server_cert_validation: ignore

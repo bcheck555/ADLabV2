@@ -20,7 +20,8 @@ RUN pip install --no-cache-dir \
 RUN ansible-galaxy collection install \
         ansible.windows:>=2.3.0 \
         community.windows:>=2.2.0 \
-        community.general:>=8.0.0
+        ansible.posix:>=1.5.0 \
+        microsoft.ad:>=1.3.0
 
 WORKDIR /ansible
 

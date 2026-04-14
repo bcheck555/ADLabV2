@@ -1,0 +1,21 @@
+Starting Win11 Packer build...
+This will take 30-60 minutes
+
+Warning: A checksum of 'none' was specified. Since ISO files are so big,
+a checksum is highly recommended.
+
+  on win11.pkr.hcl line 62:
+  (source code not available)
+
+
+win11-base.hyperv-iso.win11: output will be in this color.
+
+Build 'win11-base.hyperv-iso.win11' errored after 20 milliseconds 517 microseconds: unexpected EOF
+
+==> Wait completed after 20 milliseconds 517 microseconds
+
+==> Some builds didn't complete successfully and had errors:
+--> win11-base.hyperv-iso.win11: unexpected EOF
+
+==> Builds finished but no artifacts were created.
+ERROR: packer build failed

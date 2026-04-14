@@ -15,14 +15,14 @@ variable "vm_name" {
 
 variable "iso_path" {
   type    = string
-  default = "D:\\LabSources\\ISOs\\ubuntu-24.04.2-live-server-amd64.iso"
+  default = "D:\\LabSources\\ISOs\\ubuntu-24.04.4-live-server-amd64.iso"
 }
 
 variable "iso_checksum" {
   type    = string
-  # SHA256 of ubuntu-24.04.2-live-server-amd64.iso
+  # SHA256 of ubuntu-24.04.4-live-server-amd64.iso
   # Verify at: https://releases.ubuntu.com/24.04/SHA256SUMS
-  default = "sha256:d6dab0c3a657988501b4bd76f1297c8ae2bde9c9519a59dce03e21eeb79bcb41"
+  default = "sha256:e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433"
 }
 
 variable "output_dir" {
@@ -75,22 +75,31 @@ source "hyperv-iso" "ubuntu2404" {
   switch_name          = var.switch_name
   guest_additions_mode = "disable"
 
-  # Ubuntu autoinstall cloud-init user-data
-  # Served via Packer's built-in HTTP server
+  # Ubuntu autoinstall cloud-init user-data delivered via cidata CD (no HTTP needed)
+  cd_label = "cidata"
+  cd_files = [
+    "${path.root}/http/user-data",
+    "${path.root}/http/meta-data"
+  ]
   boot_command = [
     "c<wait>",
-    "linux /casper/vmlinuz quiet autoinstall ds=nocloud-net\\;s=http://{{.HTTPIP}}:{{.HTTPPort}}/ ---<enter><wait>",
+    "linux /casper/vmlinuz autoinstall ip=10.0.0.2::10.0.0.1:255.255.255.0:ubuntu-packer:eth0:off ds=nocloud ---<enter><wait>",
     "initrd /casper/initrd<enter><wait>",
     "boot<enter><wait>"
   ]
-  boot_wait   = "5s"
-  http_directory = "${path.root}/http"
+  boot_wait         = "10s"
+  boot_keygroup_interval = "500ms"
 
   communicator    = "ssh"
+  ssh_host        = "10.0.0.2"
+  ssh_port        = 22
   ssh_username    = var.ssh_user
   ssh_password    = var.ssh_pass
   ssh_timeout     = "30m"
-  ssh_handshake_attempts = 50
+  ssh_handshake_attempts = 500
+  # Subiquity runs its own sshd during install with a different password; wait past install
+  # before attempting to connect, so we don't burn handshake attempts auth-failing the installer.
+  pause_before_connecting = "8m"
 
   shutdown_command = "sudo systemctl poweroff"
   shutdown_timeout = "15m"

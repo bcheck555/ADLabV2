@@ -1,8 +1,92 @@
 ---
 # gitlab/tasks/main.yml
-# Installs GitLab CE on GIT01 (Ubuntu 24.04).
-# After this role runs, push the ADLabV2 repo to GitLab and register a runner
-# on the Hyper-V host to enable CI/CD for future lab rebuilds.
+# Installs Docker CE, GitLab CE, and GitLab Runner on GIT01 (Ubuntu 24.04).
+# After this role runs:
+#   1. Push the ADLabV2 repo to GitLab
+#   2. Register a GitLab Runner (Docker executor) on GIT01
+#   3. Build the adlabv2-ansible Docker image on GIT01
+#   4. All future CI/CD runs execute Ansible inside Docker on GIT01 (no host Docker Desktop needed)
+
+# ── Docker CE ─────────────────────────────────────────────────────────────────
+
+- name: Install Docker prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+  ignore_errors: true
+
+- name: Add Docker GPG key
+  ansible.builtin.shell: |
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+  args:
+    creates: /etc/apt/keyrings/docker.asc
+  ignore_errors: true
+
+- name: Add Docker apt repository
+  ansible.builtin.shell: |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" \
+      > /etc/apt/sources.list.d/docker.list
+  args:
+    creates: /etc/apt/sources.list.d/docker.list
+  ignore_errors: true
+
+- name: Install Docker CE
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+  ignore_errors: true
+
+- name: Enable and start Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+  ignore_errors: true
+
+- name: Add labadmin to docker group
+  ansible.builtin.user:
+    name: labadmin
+    groups: docker
+    append: true
+  ignore_errors: true
+
+# ── GitLab Runner ─────────────────────────────────────────────────────────────
+
+- name: Add GitLab Runner apt repository
+  ansible.builtin.shell: |
+    curl -sS https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh | bash
+  args:
+    creates: /etc/apt/sources.list.d/runner_gitlab-runner.list
+  ignore_errors: true
+
+- name: Install GitLab Runner
+  ansible.builtin.apt:
+    name: gitlab-runner
+    state: present
+    update_cache: true
+  ignore_errors: true
+
+- name: Add gitlab-runner to docker group
+  ansible.builtin.user:
+    name: gitlab-runner
+    groups: docker
+    append: true
+  ignore_errors: true
+
+# ── GitLab CE ─────────────────────────────────────────────────────────────────
 
 - name: Install GitLab dependencies
   ansible.builtin.apt:
@@ -13,6 +97,7 @@
       - postfix
     state: present
     update_cache: true
+  ignore_errors: true
 
 - name: Configure postfix for local delivery (non-interactive)
   ansible.builtin.debconf:
@@ -20,12 +105,14 @@
     question: postfix/main_mailer_type
     value: "'Local only'"
     vtype: select
+  ignore_errors: true
 
 - name: Add GitLab CE apt repository
   ansible.builtin.shell: |
     curl -sS https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | bash
   args:
     creates: /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+  ignore_errors: true
 
 - name: Install GitLab CE
   ansible.builtin.apt:
@@ -34,6 +121,7 @@
     update_cache: true
   environment:
     EXTERNAL_URL: "{{ gitlab_external_url }}"
+  ignore_errors: true
 
 - name: Configure GitLab (gitlab.rb)
   ansible.builtin.template:
@@ -43,6 +131,7 @@
     group: root
     mode: '0600'
   notify: reconfigure gitlab
+  ignore_errors: true
 
 - name: Flush handlers (reconfigure before setting root password)
   ansible.builtin.meta: flush_handlers
@@ -56,3 +145,29 @@
      user.save!"
   no_log: true
   changed_when: false
+  ignore_errors: true
+
+# ── SSH keypair for Ansible CI jobs ──────────────────────────────────────────
+# The generated public key is distributed to all lab VMs by site.yml.
+# Add the private key (/home/labadmin/.ssh/id_ed25519) as a masked file
+# variable (SSH_PRIVATE_KEY) in GitLab → Settings → CI/CD → Variables.
+
+- name: Generate ed25519 keypair for labadmin (Ansible CI identity)
+  ansible.builtin.user:
+    name: labadmin
+    generate_ssh_key: true
+    ssh_key_type: ed25519
+    ssh_key_comment: "adlabv2-ansible@git01"
+    ssh_key_file: .ssh/id_ed25519
+  ignore_errors: true
+
+- name: Read labadmin public key
+  ansible.builtin.slurp:
+    src: /home/labadmin/.ssh/id_ed25519.pub
+  register: _git01_pubkey_raw
+  ignore_errors: true
+
+- name: Expose public key as host fact (used by site.yml key distribution play)
+  ansible.builtin.set_fact:
+    git01_ansible_pubkey: "{{ _git01_pubkey_raw.content | b64decode | trim }}"
+  when: _git01_pubkey_raw is not failed

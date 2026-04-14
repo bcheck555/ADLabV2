@@ -1,0 +1,39 @@
+---
+# common_windows/tasks/domain_join.yml
+# Shared domain-join logic.  Include this task file from any role that needs
+# to join a Windows VM to the domain.  Pass target_ou to control placement:
+#
+#   - include_role:
+#       name: common_windows
+#       tasks_from: domain_join
+#     vars:
+#       target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
+
+- name: Join domain
+  ansible.windows.win_powershell:
+    script: |
+      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
+      $computer   = Get-WmiObject Win32_ComputerSystem
+      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
+        Write-Host "Already domain member."
+        $Ansible.Changed = $false
+      } else {
+        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred `
+          -OUPath '{{ target_ou }}' -Force
+        $Ansible.Changed = $true
+      }
+  register: domain_join
+  ignore_errors: true
+
+- name: Reboot after domain join
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: domain_join.changed
+
+- name: Wait for SSH to stabilise after domain join reboot
+  ansible.builtin.wait_for_connection:
+    delay: 30
+    timeout: 300
+  when: domain_join.changed

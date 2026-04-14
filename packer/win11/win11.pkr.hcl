@@ -8,6 +8,57 @@ packer {
   }
 }
 
+variable "vm_name" {
+  type    = string
+  default = "win11-packer-build"
+}
+
+variable "iso_path" {
+  type    = string
+  default = "D:\\LabSources\\ISOs\\26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
+}
+
+variable "iso_checksum" {
+  type    = string
+  default = "none"
+}
+
+variable "output_dir" {
+  type    = string
+  default = "D:\\CODE\\ADLabV2\\packer\\win11\\output"
+}
+
+variable "disk_size" {
+  type    = number
+  default = 61440
+}
+
+variable "memory" {
+  type    = number
+  default = 8192
+}
+
+variable "cpu_count" {
+  type    = number
+  default = 8
+}
+
+variable "switch_name" {
+  type    = string
+  default = "PackerSwitch"
+}
+
+variable "ssh_user" {
+  type    = string
+  default = "Administrator"
+}
+
+variable "ssh_pass" {
+  type      = string
+  default   = "P@ssw0rd!Lab1"
+  sensitive = true
+}
+
 source "hyperv-iso" "win11" {
   vm_name              = var.vm_name
   iso_url              = var.iso_path
@@ -22,18 +73,17 @@ source "hyperv-iso" "win11" {
   switch_name          = var.switch_name
   guest_additions_mode = "disable"
 
-  cd_files  = ["${path.root}/http/autounattend.xml"]
+  cd_files  = ["${path.root}/http/autounattend.xml", "${path.root}/http/OpenSSH-Win64-v9.5.0.0.msi", "${path.root}/http/PowerShell-7.6.0-win-x64.msi"]
   cd_label  = "UNATTEND"
 
   boot_wait    = "1s"
   boot_command = ["<enter><wait><enter><wait><enter><wait><enter>"]
 
-  communicator   = "winrm"
-  winrm_username = var.winrm_user
-  winrm_password = var.winrm_pass
-  winrm_use_ssl  = false
-  winrm_insecure = true
-  winrm_timeout  = "2h"
+  communicator = "ssh"
+  ssh_host     = "10.0.0.2"
+  ssh_username = var.ssh_user
+  ssh_password = var.ssh_pass
+  ssh_timeout  = "2h"
 
   shutdown_command = "cmd /c echo Waiting for sysprep scheduled task..."
   shutdown_timeout = "30m"

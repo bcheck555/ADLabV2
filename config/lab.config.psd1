@@ -13,6 +13,12 @@
     DnsServer1        = '192.168.100.10'   # DC01
     DnsServer2        = '192.168.100.11'   # DC02
 
+    # === Packer Build Network (isolated) ===
+    PackerSwitch      = 'PackerSwitch'
+    PackerBuildIP     = '10.0.0.2'
+    PackerBuildGw     = '10.0.0.1'
+    PackerBuildPfx    = 24
+
     # === Paths ===
     LabRoot           = 'D:\CODE\ADLabV2'
     BaseVhdDir        = 'D:\CODE\ADLabV2\base-vhds'
@@ -24,7 +30,7 @@
     # === ISOs ===
     WS2025ISO         = 'D:\LabSources\ISOs\26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso'
     Win11ISO          = 'D:\LabSources\ISOs\26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso'
-    Ubuntu2404ISO     = 'D:\LabSources\ISOs\ubuntu-24.04.2-live-server-amd64.iso'
+    Ubuntu2404ISO     = 'D:\LabSources\ISOs\ubuntu-24.04.4-live-server-amd64.iso'
     SqlServerISO      = 'D:\LabSources\SoftwarePackages\enu_sql_server_2022_developer_edition_x64_dvd_7cacf733.iso'
     ScvmmZip          = 'D:\LabSources\SoftwarePackages\SCVMM_2025.zip'
 

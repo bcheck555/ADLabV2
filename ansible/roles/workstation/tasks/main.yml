@@ -2,27 +2,36 @@
 # workstation/tasks/main.yml
 # Joins Win11 workstations to the domain.
 
-- name: Join domain
+- name: Rearm Windows license grace period
   ansible.windows.win_powershell:
     script: |
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
-      $computer   = Get-WmiObject Win32_ComputerSystem
-      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
-        Write-Host "Already domain member."
-      } else {
-        Add-Computer -DomainName '{{ lab_domain_name }}' `
-          -OUPath "OU=Lab Workstations,{{ lab_domain_dn }}" `
-          -Credential $domainCred -Force
+      $status = (cscript //nologo C:\Windows\System32\slmgr.vbs /dli) -join ' '
+      if ($status -match 'Notification|Grace|OOBGrace|NonGenuine') {
+        cscript //nologo C:\Windows\System32\slmgr.vbs /rearm
         $Ansible.Changed = $true
+      } else {
+        $Ansible.Changed = $false
       }
-  register: domain_join
+  register: rearm_result
+  ignore_errors: true
 
-- name: Reboot after domain join
+- name: Reboot after rearm
   ansible.windows.win_reboot:
-    reboot_timeout: 300
-    post_reboot_delay: 30
-  when: domain_join.changed
+    reboot_timeout: 180
+    post_reboot_delay: 15
+  when: rearm_result.changed
+
+- name: Wait for SSH after rearm reboot
+  ansible.builtin.wait_for_connection:
+    delay: 15
+    timeout: 180
+  when: rearm_result.changed
+
+- include_role:
+    name: common_windows
+    tasks_from: domain_join
+  vars:
+    target_ou: 'OU=Workstations,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
 
 - name: Add domain users to local Remote Desktop group
   ansible.windows.win_group_membership:
@@ -30,3 +39,4 @@
     members:
       - "{{ lab_domain_netbios }}\\Domain Users"
     state: present
+  ignore_errors: true

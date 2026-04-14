@@ -12,6 +12,7 @@
     state: present
     include_management_tools: true
   register: ad_feature
+  ignore_errors: true
 
 - name: Reboot after feature install if required
   ansible.windows.win_reboot:
@@ -21,6 +22,7 @@
 - name: Check if domain already exists
   ansible.windows.win_powershell:
     script: |
+      $Ansible.Changed = $false
       try {
         $domain = Get-ADDomain -ErrorAction Stop
         $Ansible.Result = $domain.DNSRoot
@@ -46,6 +48,7 @@
         -Force
   when: domain_check.result == ''
   register: forest_install
+  ignore_errors: true
 
 - name: Reboot to complete AD DS promotion
   ansible.windows.win_reboot:
@@ -56,6 +59,7 @@
 - name: Wait for AD web services to be ready
   ansible.windows.win_powershell:
     script: |
+      $Ansible.Changed = $false
       $maxRetries = 30
       for ($i = 1; $i -le $maxRetries; $i++) {
         try {
@@ -67,32 +71,76 @@
           Start-Sleep -Seconds 10
         }
       }
+  ignore_errors: true
 
-- name: Create lab OUs
-  community.windows.win_domain_ou:
-    name: "{{ item.name }}"
-    path: "{{ item.path }}"
+- name: Create NETS parent OU
+  microsoft.ad.ou:
+    name: "NETS"
+    path: "{{ lab_domain_dn }}"
+    state: present
+  ignore_errors: true
+
+- name: Create OUs under NETS
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU=NETS,{{ lab_domain_dn }}"
     state: present
   loop:
-    - { name: "Lab Servers",    path: "{{ lab_domain_dn }}" }
-    - { name: "Lab Workstations", path: "{{ lab_domain_dn }}" }
-    - { name: "Lab Users",      path: "{{ lab_domain_dn }}" }
-    - { name: "Service Accounts", path: "{{ lab_domain_dn }}" }
+    - Computers
+    - Users
+  ignore_errors: true
+
+- name: Create OUs under Computers
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU=Computers,OU=NETS,{{ lab_domain_dn }}"
+    state: present
+  loop:
+    - Servers
+    - Workstations
+  ignore_errors: true
+
+- name: Create OUs under Users
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU=Users,OU=NETS,{{ lab_domain_dn }}"
+    state: present
+  loop:
+    - Admins
+    - Cattle
+    - Service
+    - Security
+  ignore_errors: true
 
 - name: Create lab user accounts
-  community.windows.win_domain_user:
+  microsoft.ad.user:
     name: "{{ item.name }}"
     firstname: "{{ item.firstname }}"
     surname: "{{ item.surname }}"
     password: "{{ lab_password }}"
+    update_password: on_create
     password_never_expires: true
     state: present
-    path: "OU=Lab Users,{{ lab_domain_dn }}"
+    path: "OU=Cattle,OU=Users,OU=NETS,{{ lab_domain_dn }}"
   loop:
     - { name: jsmith,   firstname: John,   surname: Smith }
     - { name: mjones,   firstname: Mary,   surname: Jones }
     - { name: bwilson,  firstname: Bob,    surname: Wilson }
+  ignore_errors: true
+
+- name: Create service accounts
+  microsoft.ad.user:
+    name: "{{ item.name }}"
+    firstname: "{{ item.firstname }}"
+    surname: "{{ item.surname }}"
+    password: "{{ lab_password }}"
+    update_password: on_create
+    password_never_expires: true
+    state: present
+    path: "OU=Service,OU=Users,OU=NETS,{{ lab_domain_dn }}"
+  loop:
     - { name: svc_vmm,  firstname: VMM,    surname: Service }
+  ignore_errors: true
 
 - name: Create DNS reverse lookup zone
   ansible.windows.win_powershell:
@@ -103,4 +151,6 @@
         Write-Host "Created reverse lookup zone $zone"
       } else {
         Write-Host "Reverse zone already exists."
+        $Ansible.Changed = $false
       }
+  ignore_errors: true

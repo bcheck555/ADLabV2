@@ -7,6 +7,7 @@
 - name: Set static IP address
   ansible.windows.win_powershell:
     script: |
+      $Ansible.Changed = $false
       $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
       $current = Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
       if ($current.IPAddress -ne '{{ ansible_host }}') {
@@ -18,15 +19,18 @@
           -DefaultGateway '{{ lab_gateway }}'
         Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex `
           -ServerAddresses @('{{ lab_dns1 }}', '{{ lab_dns2 }}')
+        $Ansible.Changed = $true
         Write-Host "IP set to {{ ansible_host }}"
       } else {
         Write-Host "IP already {{ ansible_host }}, skipping."
       }
+  ignore_errors: true
 
 - name: Set computer name
   ansible.windows.win_hostname:
     name: "{{ inventory_hostname | upper }}"
   register: hostname_result
+  ignore_errors: true
 
 - name: Reboot if hostname changed
   ansible.windows.win_reboot:

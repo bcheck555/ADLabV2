@@ -1,0 +1,5 @@
+---
+# common_windows/defaults/main.yml
+# Default OU for domain-joined servers.  Override per-role by passing
+# target_ou in the include_role vars block.
+target_ou: "OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}"

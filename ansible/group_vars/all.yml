@@ -19,6 +19,21 @@ lab_prefix_len:  24
 # === Common credentials (lab only) ===
 lab_password: "P@ssw0rd!Lab1"   # VAULT THIS
 
+# === SQL Server ===
+sql_sa_password: "P@ssw0rd!SA1"   # VAULT THIS
+
+# === Hyper-V host ===
+lab_hvhost_ip:  192.168.1.50   # Management IP of the Hyper-V host — update if different
+
+# === SCVMM ===
+# Leave blank if using an evaluation/volume-licensed build that requires no key.
+# Set to your 25-char key (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX) for retail installs.
+scvmm_product_key: ""   # e.g. "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+
+# === Software Packages (on Hyper-V host D:\LabSources\SoftwarePackages) ===
+sql_iso_host_path:          'D:\LabSources\SoftwarePackages\SQLServer2025-x64-ENU-StdDev.iso'
+scvmm_sources_host_path:    'D:\LabSources\SoftwarePackages'
+
 # === GitLab ===
 gitlab_external_url: "http://192.168.100.5"
 gitlab_version:      "17.6.1"   # Pin to a specific CE release

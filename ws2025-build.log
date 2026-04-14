@@ -1,0 +1,21 @@
+Starting WS2025 Packer build...
+This will take 30-60 minutes
+
+Warning: A checksum of 'none' was specified. Since ISO files are so big,
+a checksum is highly recommended.
+
+  on ws2025.pkr.hcl line 62:
+  (source code not available)
+
+
+ws2025-base.hyperv-iso.ws2025: output will be in this color.
+
+Build 'ws2025-base.hyperv-iso.ws2025' errored after 21 milliseconds 476 microseconds: unexpected EOF
+
+==> Wait completed after 21 milliseconds 476 microseconds
+
+==> Some builds didn't complete successfully and had errors:
+--> ws2025-base.hyperv-iso.ws2025: unexpected EOF
+
+==> Builds finished but no artifacts were created.
+ERROR: packer build failed

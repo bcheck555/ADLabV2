@@ -3,92 +3,431 @@
 # Joins domain and installs SCVMM 2025 on VMM01.
 # SCVMM requires SQL Server — DB01 must be configured first.
 # VMM01 needs nested virtualization enabled (set in terraform/vms.tf).
+#
+# Software source: D:\LabSources\SoftwarePackages on hvhost.
+# Installers are staged locally on VMM01 before running to avoid SMB hangs.
 
-- name: Join domain
+- include_role:
+    name: common_windows
+    tasks_from: domain_join
+  vars:
+    target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
+
+# ── Install ADK ───────────────────────────────────────────────────────────────
+
+- name: Stage ADK offline layout locally on VMM01
   ansible.windows.win_powershell:
     script: |
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
-      $computer   = Get-WmiObject Win32_ComputerSystem
-      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
-        Write-Host "Already domain member."
-      } else {
-        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
-        $Ansible.Changed = $true
+      $Ansible.Changed = $false
+      $adkDest   = 'C:\ADKSetup'
+      $adkPeDest = 'C:\ADKWinPESetup'
+      foreach ($d in @($adkDest, $adkPeDest)) {
+        New-Item $d -ItemType Directory -Force | Out-Null
       }
-  register: domain_join
-
-- name: Reboot after domain join
-  ansible.windows.win_reboot:
-    reboot_timeout: 300
-    post_reboot_delay: 30
-  when: domain_join.changed
+      if (-not (Test-Path "$adkDest\adksetup.exe")) {
+        if (-not (Test-Path 'S:\')) {
+          cmd /c "net use S: \\{{ lab_gateway }}\LabSources /user:Administrator {{ lab_password }} /persistent:no" | Out-Null
+        }
+        if (-not (Test-Path 'S:\ADK\adksetup.exe')) {
+          throw "adksetup.exe not found at S:\ADK\ — populate D:\LabSources\SoftwarePackages\ADK on hvhost."
+        }
+        Write-Host "Copying ADK layout to $adkDest..."
+        Copy-Item -Path 'S:\ADK\*' -Destination $adkDest -Recurse -Force
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "ADK layout already staged locally, skipping copy."
+      }
+      if (-not (Test-Path "$adkPeDest\adkwinpesetup.exe")) {
+        if (-not (Test-Path 'S:\')) {
+          cmd /c "net use S: \\{{ lab_gateway }}\LabSources /user:Administrator {{ lab_password }} /persistent:no" | Out-Null
+        }
+        if (-not (Test-Path 'S:\ADKWinPE\adkwinpesetup.exe')) {
+          throw "adkwinpesetup.exe not found at S:\ADKWinPE\ — populate D:\LabSources\SoftwarePackages\ADKWinPE on hvhost."
+        }
+        Write-Host "Copying ADK WinPE layout to $adkPeDest..."
+        Copy-Item -Path 'S:\ADKWinPE\*' -Destination $adkPeDest -Recurse -Force
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "ADK WinPE layout already staged locally, skipping copy."
+      }
+  ignore_errors: false
 
 - name: Install SCVMM prerequisites (ADK)
   ansible.windows.win_powershell:
     script: |
-      $adkLayout = '{{ scvmm_adk_path | default("D:\\LabSources\\ADK") }}'
-      if (-not (Test-Path $adkLayout)) {
-        throw "ADK offline layout not found at $adkLayout. Run adksetup.exe /layout first."
+      $adkInstalled = Test-Path 'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools'
+      if ($adkInstalled) {
+        Write-Host "ADK already installed, skipping."
+        $Ansible.Changed = $false
+        return
       }
-      $adkSetup = Join-Path $adkLayout 'adksetup.exe'
-      $result = Start-Process $adkSetup `
-        -ArgumentList '/quiet /features OptionId.DeploymentTools' `
-        -Wait -PassThru
-      if ($result.ExitCode -notin @(0, 3010)) {
-        throw "ADK install failed: $($result.ExitCode)"
-      }
+      $adkExe = 'C:\ADKSetup\adksetup.exe'
+      $peExe  = 'C:\ADKWinPESetup\adkwinpesetup.exe'
+      if (-not (Test-Path $adkExe)) { throw "Local ADK layout missing at $adkExe — run staging task first." }
+      if (-not (Test-Path $peExe))  { throw "Local ADK WinPE layout missing at $peExe — run staging task first." }
 
-- name: Extract SCVMM zip
+      Write-Host "Installing ADK core from $adkExe..."
+      $r = Start-Process $adkExe -ArgumentList '/quiet /norestart /features OptionId.DeploymentTools' -Wait -PassThru
+      if ($r.ExitCode -notin @(0, 3010, 1638)) { throw "ADK install failed: $($r.ExitCode)" }
+
+      Write-Host "Installing ADK WinPE add-on from $peExe..."
+      $r = Start-Process $peExe -ArgumentList '/quiet /norestart /features OptionId.WindowsPreinstallationEnvironment' -Wait -PassThru
+      if ($r.ExitCode -notin @(0, 3010, 1638)) { throw "ADK WinPE install failed: $($r.ExitCode)" }
+
+      $Ansible.Changed = $true
+  register: adk_install
+  ignore_errors: true
+
+- name: Reboot after ADK install
+  ansible.windows.win_reboot:
+    reboot_timeout: 300
+    post_reboot_delay: 30
+  when: adk_install.changed
+
+# ── SCVMM prerequisites in AD ─────────────────────────────────────────────────
+
+- name: Create svc_vmm service account in AD
   ansible.windows.win_powershell:
     script: |
-      $zip  = '{{ scvmm_zip_path | default("D:\\LabSources\\SCVMM_2025.zip") }}'
-      $dest = 'C:\LabSetup\SCVMM'
-      if (-not (Test-Path $dest)) {
-        Expand-Archive -Path $zip -DestinationPath $dest -Force
-        Write-Host "Extracted SCVMM."
+      Import-Module ActiveDirectory -ErrorAction Stop
+      $secPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
+      $user = 'svc_vmm'
+      if (-not (Get-ADUser -Filter { SamAccountName -eq $user } -ErrorAction SilentlyContinue)) {
+        New-ADUser -Name $user `
+                   -SamAccountName $user `
+                   -UserPrincipalName "$user@{{ lab_domain_name }}" `
+                   -AccountPassword $secPass `
+                   -Enabled $true `
+                   -PasswordNeverExpires $true `
+                   -Path "OU=ServiceAccounts,OU=Users,OU=NETS,{{ lab_domain_dn }}"
+        Write-Host "Created $user"
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "$user already exists, skipping."
+        $Ansible.Changed = $false
+      }
+  delegate_to: dc01
+  ignore_errors: true
+
+- name: Create SCVMM DKM container in AD
+  ansible.windows.win_powershell:
+    script: |
+      Import-Module ActiveDirectory -ErrorAction Stop
+      $dkmPath = "CN=System,{{ lab_domain_dn }}"
+      if (-not (Get-ADObject -Filter { Name -eq 'VMMServer' } -SearchBase $dkmPath -ErrorAction SilentlyContinue)) {
+        New-ADObject -Name 'VMMServer' -Type 'container' -Path $dkmPath
+        Write-Host "Created CN=VMMServer,CN=System,{{ lab_domain_dn }}"
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "DKM container already exists, skipping."
+        $Ansible.Changed = $false
+      }
+  delegate_to: dc01
+  ignore_errors: true
+
+- name: Add svc_vmm to local Administrators on VMM01
+  ansible.windows.win_powershell:
+    script: |
+      $group  = [ADSI]'WinNT://./Administrators,group'
+      $member = "WinNT://{{ lab_domain_netbios }}/svc_vmm,user"
+      try {
+        $group.Add($member)
+        Write-Host "Added svc_vmm to local Administrators."
+        $Ansible.Changed = $true
+      } catch {
+        if ($_.Exception.Message -like '*already a member*') {
+          Write-Host "svc_vmm already a member, skipping."
+          $Ansible.Changed = $false
+        } else { throw }
+      }
+  ignore_errors: true
+
+# ── Install SCVMM ─────────────────────────────────────────────────────────────
+
+- name: Stage SCVMM installer and MSI prerequisites locally on VMM01
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $dest = 'C:\SCVMMSetup'
+      New-Item $dest -ItemType Directory -Force | Out-Null
+
+      # Map share if needed
+      if (-not (Test-Path 'S:\')) {
+        cmd /c "net use S: \\{{ lab_gateway }}\LabSources /user:Administrator {{ lab_password }} /persistent:no" | Out-Null
+      }
+
+      if (-not (Test-Path "$dest\setup.exe")) {
+        if (-not (Test-Path 'S:\SCVMM2025\setup.exe')) {
+          throw "setup.exe not found at S:\SCVMM2025\ — populate D:\LabSources\SoftwarePackages\SCVMM2025 on hvhost."
+        }
+        Write-Host "Copying SCVMM installer to $dest..."
+        Copy-Item -Path 'S:\SCVMM2025\*' -Destination $dest -Recurse -Force
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "SCVMM installer already staged, skipping copy."
+      }
+
+      # Stage ODBC and sqlcmd MSIs from root of share
+      foreach ($msi in @('msodbcsql.msi', 'MsSqlCmdLnUtils.msi')) {
+        if (-not (Test-Path "$dest\$msi")) {
+          if (-not (Test-Path "S:\$msi")) { Write-Warning "$msi not found on share, skipping." ; continue }
+          Copy-Item "S:\$msi" "$dest\$msi" -Force
+          $Ansible.Changed = $true
+        }
+      }
+  ignore_errors: false
+
+- name: Disable SQL Server force encryption on DB01
+  ansible.windows.win_powershell:
+    script: |
+      $regBase = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server'
+      $instance = Get-ChildItem $regBase -ErrorAction SilentlyContinue |
+                  Where-Object { $_.PSChildName -match '^MSSQL\d+\.MSSQLSERVER$' } |
+                  Select-Object -First 1 -ExpandProperty PSChildName
+      if (-not $instance) { throw "Could not find SQL Server instance registry key under $regBase" }
+      $regPath = "$regBase\$instance\MSSQLServer\SuperSocketNetLib"
+      $current = (Get-ItemProperty $regPath -ErrorAction Stop).ForceEncryption
+      if ($current -ne 0) {
+        Set-ItemProperty $regPath -Name 'ForceEncryption' -Value 0
+        Restart-Service MSSQLSERVER -Force
+        Start-Sleep -Seconds 5
+        Write-Host "SQL Server force encryption disabled and service restarted."
+        $Ansible.Changed = $true
+      } else {
+        Write-Host "SQL Server force encryption already disabled, skipping."
+        $Ansible.Changed = $false
+      }
+  delegate_to: db01
+  ignore_errors: true
+
+- name: Apply .NET Framework TLS fix on VMM01
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      foreach ($path in @(
+        'HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\.NETFramework\v4.0.30319'
+      )) {
+        New-Item $path -Force -ErrorAction SilentlyContinue | Out-Null
+        $cur = Get-ItemProperty $path -ErrorAction SilentlyContinue
+        if ($cur.SystemDefaultTlsVersions -ne 1 -or $cur.SchUseStrongCrypto -ne 1) {
+          Set-ItemProperty $path -Name 'SystemDefaultTlsVersions' -Value 1 -Type DWord
+          Set-ItemProperty $path -Name 'SchUseStrongCrypto'        -Value 1 -Type DWord
+          $Ansible.Changed = $true
+        }
+      }
+      Write-Host "TLS fix applied."
+  ignore_errors: true
+
+- name: Install SCVMM prerequisites (.NET, VCRedist, ODBC, sqlcmd)
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $prereqs = @(
+        @{ Name = '.NET Framework 4.5';                    Path = 'C:\SCVMMSetup\Prerequisites\DotNetFx45\dotNetFx45_Full_x86_x64.exe'; Args = '/q /norestart';                                    Msi = $false }
+        @{ Name = 'Visual C++ Redistributable';            Path = 'C:\SCVMMSetup\Prerequisites\VCRedist\amd64\vcredist_x64.exe';         Args = '/quiet /norestart';                                Msi = $false }
+        @{ Name = 'ODBC Driver for SQL Server';            Path = 'C:\SCVMMSetup\msodbcsql.msi';                                         Args = '/quiet /norestart IACCEPTMSODBCSQLLICENSETERMS=YES'; Msi = $true  }
+        @{ Name = 'SQL Command Line Utilities (sqlcmd)';   Path = 'C:\SCVMMSetup\MsSqlCmdLnUtils.msi';                                   Args = '/quiet /norestart IACCEPTMSSQLCMDLNUTILSLICENSETERMS=YES'; Msi = $true }
+      )
+      foreach ($p in $prereqs) {
+        if (-not (Test-Path $p.Path)) { Write-Warning "Skipping $($p.Name) — not found at $($p.Path)"; continue }
+        Write-Host "Installing $($p.Name)..."
+        if ($p.Msi) {
+          $r = Start-Process msiexec.exe -ArgumentList "/i `"$($p.Path)`" $($p.Args)" -Wait -PassThru
+        } else {
+          $r = Start-Process $p.Path -ArgumentList $p.Args -Wait -PassThru
+        }
+        if ($r.ExitCode -notin @(0, 3010, 1638)) { throw "$($p.Name) failed: exit $($r.ExitCode)" }
+        Write-Host "$($p.Name): done (exit $($r.ExitCode))."
         $Ansible.Changed = $true
       }
+  ignore_errors: true
 
-- name: Install SCVMM server
+- name: Write SCVMM unattend INI
   ansible.windows.win_powershell:
     script: |
-      $setup = 'C:\LabSetup\SCVMM\setup.exe'
-      if (-not (Test-Path $setup)) { throw "SCVMM setup.exe not found." }
-
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $iniContent = @"
-[OPTIONS]
-ProductKey=
-UserName=Lab Admin
-CompanyName=ADLabV2
-ProgramFiles=C:\Program Files\Microsoft System Center\Virtual Machine Manager
-CreateNewSqlDatabase=1
-SqlInstanceName=MSSQLSERVER
-SqlDatabaseName=VirtualManagerDB
-RemoteDatabaseImpersonation=0
-SqlMachineName=DB01.{{ lab_domain_name }}
-IndigoTcpPort=8100
-IndigoHTTPSPort=8101
-IndigoHTTPPort=8102
-IndigoNETTCPPort=8103
-WSManTcpPort=5985
-BitsTcpPort=443
-SQMOptIn=0
-MUOptIn=0
-VmmServiceLocalAccount=0
-HighlyAvailableVMM=0
-VmmServiceDomain={{ lab_domain_netbios }}
-VmmServiceUserName=svc_vmm
-VmmServiceUserPassword={{ lab_password }}
-"@
-      $iniPath = 'C:\LabSetup\scvmm_unattend.ini'
-      $iniContent | Set-Content $iniPath -Force -Encoding ASCII
-
-      $result = Start-Process $setup `
-        -ArgumentList "/server /i /f $iniPath /VmmServiceAccountPassword {{ lab_password }}" `
-        -Wait -PassThru -WorkingDirectory 'C:\LabSetup\SCVMM'
-      if ($result.ExitCode -notin @(0, 3010)) {
-        throw "SCVMM install failed: $($result.ExitCode)"
-      }
+      New-Item 'C:\SCVMMSetup' -ItemType Directory -Force | Out-Null
+      @(
+        '[OPTIONS]',
+        'UserName=Administrator',
+        'CompanyName=ADLabV2',
+        'ProductKey={{ scvmm_product_key | default("") }}',
+        'CreateNewSqlDatabase=1',
+        'SqlInstanceName=MSSQLSERVER',
+        'SqlDatabaseName=VirtualManagerDB',
+        'SqlMachineName=DB01.{{ lab_domain_name }}',
+        'IndigoTcpPort=8100',
+        'IndigoHTTPSPort=8101',
+        'IndigoNETTCPPort=8102',
+        'IndigoHTTPPort=8103',
+        'WSManTcpPort=5985',
+        'BitsTcpPort=443',
+        'CreateNewLibraryShare=1',
+        'LibraryShareName=MSSCVMMLibrary',
+        'LibrarySharePath=C:\ProgramData\Virtual Machine Manager Library Files',
+        'SQMOptIn=0',
+        'MUOptIn=0',
+        'VmmServiceLocalAccount=0',
+        'VmmServiceDomain={{ lab_domain_netbios }}',
+        'VmmServiceUserName=svc_vmm',
+        'VmmServiceUserPassword={{ lab_password }}',
+        'TopContainerName=CN=VMMServer,CN=System,{{ lab_domain_dn }}',
+        'HighlyAvailable=0'
+      ) -join "`r`n" | Set-Content 'C:\SCVMMSetup\VMServer.ini' -Encoding ASCII
       $Ansible.Changed = $true
+  ignore_errors: true
+
+# SCVMM setup.exe reconfigures WinRM mid-install, which kills any active
+# WinRM session (including Ansible's). Running setup.exe directly inside
+# win_powershell causes a deadlock: setup orphans, no log is written, the
+# task times out. Two "Virtual Machine Manager Setup" processes appear but
+# never complete. Fix: fire setup via a Scheduled Task (runs outside WinRM),
+# then poll for completion over fresh short-lived WinRM calls.
+
+# Deploy the wrapper script via win_template so Ansible renders {{ }} variables
+# before the file lands on disk.  This avoids the two bugs in the previous
+# win_powershell approach:
+#   1. Embedding the script in a PS single-quoted here-string (@' '@) and writing
+#      it with Set-Content caused backslash doubling (C:\path) in the output file.
+#      SCVMM's /f INI parser does not resolve double backslashes, so it silently
+#      skipped the INI — leaving SqlInstanceName, SqlDBAdminName, etc. all blank.
+#   2. The argument array was named $args, which is a PowerShell reserved automatic
+#      variable (holds unbound positional params).  Under a scheduled-task/SYSTEM
+#      context the variable collided and CLI flags were dropped, also leaving all
+#      credential fields blank in the setup log.
+# Use the same @() -join pattern as "Write SCVMM unattend INI" above.
+# win_template / win_copy both require SFTP or SCP which are unavailable.
+# Jinja2 variables are expanded by Ansible before the script is sent over
+# WinRM.  Inside PS single-quoted strings '' = literal single-quote;
+# backslashes are literal (no escaping needed), so paths are clean.
+- name: Write SCVMM install wrapper script
+  ansible.windows.win_powershell:
+    script: |
+      New-Item 'C:\SCVMMSetup' -ItemType Directory -Force | Out-Null
+      @(
+        '$logDir   = ''C:\ProgramData\VMMLogs''',
+        'New-Item $logDir -ItemType Directory -Force | Out-Null',
+        '$sentinel = "$logDir\ansible_install.running"',
+        '$exitFile = "$logDir\ansible_install.exitcode"',
+        'Set-Content $sentinel ''running'' -Encoding ASCII',
+        'Remove-Item $exitFile -Force -ErrorAction SilentlyContinue',
+        '$setupArgs  = ''/server /i''',
+        '$setupArgs += '' /f "C:\SCVMMSetup\VMServer.ini"''',
+        '$setupArgs += '' /SqlDBAdminDomain {{ lab_domain_netbios }}''',
+        '$setupArgs += '' /SqlDBAdminName Administrator''',
+        '$setupArgs += '' /SqlDBAdminPassword "{{ lab_password }}"''',
+        '$setupArgs += '' /VmmServiceDomain {{ lab_domain_netbios }}''',
+        '$setupArgs += '' /VmmServiceUserName svc_vmm''',
+        '$setupArgs += '' /VmmServiceUserPassword "{{ lab_password }}"''',
+        '$setupArgs += '' /IACCEPTSCEULA''',
+        '$r = Start-Process ''C:\SCVMMSetup\setup.exe'' -ArgumentList $setupArgs -Wait -PassThru',
+        'Set-Content $exitFile $r.ExitCode -Encoding ASCII',
+        'Remove-Item $sentinel -Force -ErrorAction SilentlyContinue'
+      ) -join "`r`n" | Set-Content 'C:\SCVMMSetup\run_scvmm_install.ps1' -Encoding UTF8
+      $Ansible.Changed = $true
+  ignore_errors: false
+
+- name: Register and launch SCVMM install as a Scheduled Task
+  ansible.windows.win_powershell:
+    script: |
+      if (Get-Service SCVMMService -ErrorAction SilentlyContinue) {
+        Write-Host "SCVMM already installed — skipping."
+        $Ansible.Changed = $false
+        return
+      }
+
+      $setup = 'C:\SCVMMSetup\setup.exe'
+      if (-not (Test-Path $setup)) { throw "SCVMM setup.exe not found at $setup" }
+
+      Write-Host "Testing SQL connectivity to DB01.{{ lab_domain_name }}:1433..."
+      $sql = Test-NetConnection -ComputerName 'DB01.{{ lab_domain_name }}' -Port 1433 -WarningAction SilentlyContinue
+      if (-not $sql.TcpTestSucceeded) { throw "Cannot reach SQL Server at DB01:1433" }
+      Write-Host "SQL connectivity: OK"
+
+      # Clean up any prior sentinel/exit files from a failed attempt
+      Remove-Item 'C:\ProgramData\VMMLogs\ansible_install.running'  -Force -ErrorAction SilentlyContinue
+      Remove-Item 'C:\ProgramData\VMMLogs\ansible_install.exitcode' -Force -ErrorAction SilentlyContinue
+
+      $taskName = 'SCVMMInstall'
+      $scriptPath = 'C:\SCVMMSetup\run_scvmm_install.ps1'
+      $action   = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NonInteractive -ExecutionPolicy Bypass -File $scriptPath"
+      $settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+      $taskUser  = '{{ lab_domain_netbios }}\Administrator'
+      $password  = '{{ lab_password }}'
+
+      if(-not $password) { throw "lab_password cannot be empty." }
+      
+      try {
+        Write-Host "Attempting to register scheduled task '$taskName'..."
+        Write-Host "  Task Name: '$taskName'"
+        Write-Host "  Action Execute: '$($action.Execute)'"
+        Write-Host "  Action Argument: '$($action.Argument)'"
+        Write-Host "  User: '$taskUser'"
+        Write-Host "  Task Settings ExecutionTimeLimit: '$($settings.ExecutionTimeLimit.ToString())'"
+
+        $registeredTask = Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -User $taskUser -Password $password -RunLevel Highest -Force -ErrorAction Stop
+        Write-Host "Task '$taskName' registered successfully."
+        Write-Host "Starting scheduled task '$taskName'..."
+        Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        Write-Host "Scheduled task '$taskName' launched. Check Task Scheduler for 'SCVMMInstall'. Wrapper script at C:\SCVMMSetup\run_scvmm_install.ps1"
+      } catch {
+        throw
+      }
+      
+      $Ansible.Changed = $true
+  ignore_errors: false
+
+- name: Poll until SCVMM install completes (up to 90 min)
+  ansible.windows.win_powershell:
+    script: |
+      $exitFile   = 'C:\ProgramData\VMMLogs\ansible_install.exitcode'
+      $sentinel   = 'C:\ProgramData\VMMLogs\ansible_install.running'
+      $maxMinutes = 90
+      $pollSecs   = 30
+      $elapsed    = 0
+
+      # If SCVMM is already installed (re-run), bail out immediately
+      if (Get-Service SCVMMService -ErrorAction SilentlyContinue) {
+        Write-Host "SCVMM service present — already installed."
+        $Ansible.Changed = $false
+        return
+      }
+
+      Write-Host "Polling for SCVMM install completion (timeout: $maxMinutes min)..."
+      while ($true) {
+        Start-Sleep -Seconds $pollSecs
+        $elapsed += $pollSecs
+
+        $taskState = (Get-ScheduledTask -TaskName 'SCVMMInstall' -ErrorAction SilentlyContinue).State
+        $exitExists = Test-Path $exitFile
+        $running    = Test-Path $sentinel
+
+        Write-Host "  [$([int]($elapsed/60))m] task=$taskState exit_written=$exitExists sentinel=$running"
+
+        if ($exitExists) {
+          $code = [int](Get-Content $exitFile -Raw).Trim()
+          Write-Host "SCVMM install exited with code $code."
+          Unregister-ScheduledTask -TaskName 'SCVMMInstall' -Confirm:$false -ErrorAction SilentlyContinue
+          if ($code -notin @(0, 3010)) {
+            $log = if (Test-Path 'C:\ProgramData\VMMLogs\SetupWizard.log') {
+              Get-Content 'C:\ProgramData\VMMLogs\SetupWizard.log' -Tail 80 | Out-String
+            } else { '(no log found — install may have been blocked before setup initialised)' }
+            throw "SCVMM install failed (exit $code).`n$log"
+          }
+          Write-Host "SCVMM install succeeded."
+          $Ansible.Changed = $true
+          return
+        }
+
+        if ($taskState -eq 'Ready' -and -not $running) {
+          # Task finished but wrote no exit file — something killed it very early
+          throw "SCVMM scheduled task ended without writing an exit code. Check C:\ProgramData\VMMLogs\ and the Windows Event Log."
+        }
+
+        if ($elapsed -ge ($maxMinutes * 60)) {
+          throw "SCVMM install timed out after $maxMinutes minutes."
+        }
+      }
+  async: 5700   # 95 min — slightly over the 90 min poll window
+  poll: 60
+  ignore_errors: false

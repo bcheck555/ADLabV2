@@ -10,6 +10,9 @@ if ($svc.Status -ne 'Running') { Start-Service WinRM }
 winrm set winrm/config/service '@{AllowUnencrypted="true"}' | Out-Null
 winrm set winrm/config/service/auth '@{Basic="true"}' | Out-Null
 
+Write-Host 'Enabling built-in Administrator account...'
+net user Administrator /active:yes | Out-Null
+
 Write-Host 'Expanding C: volume...'
 $supportedSize = (Get-PartitionSupportedSize -DriveLetter C).SizeMax
 $currentSize   = (Get-Partition -DriveLetter C).Size

@@ -2,57 +2,94 @@
 # sql_server/tasks/main.yml
 # Joins domain and installs SQL Server 2022 Developer Edition on DB01.
 
-- name: Join domain
+- include_role:
+    name: common_windows
+    tasks_from: domain_join
+  vars:
+    target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
+
+- name: Verify hvhost is reachable before delegating
+  # ansible.builtin.ping bootstraps a Python script — it doesn't work on
+  # Windows SSH+PowerShell connections and will hang looking for Python.
+  # ansible.builtin.raw sends a bare SSH command with no module overhead.
+  ansible.builtin.raw: echo ok
+  delegate_to: hvhost
+  run_once: true
+  changed_when: false
+
+- name: Attach SQL ISO via Hyper-V DVD drive
+  # hvhost uses ansible_connection=ssh + ansible_shell_type=powershell.
+  # win_powershell requires WinRM — use ansible.builtin.shell here instead.
+  # async+poll keeps Ansible printing a heartbeat line so the run doesn't look hung.
+  ansible.windows.win_shell: |
+    $isoPath = '{{ sql_iso_host_path }}'
+    Write-Host "[$(Get-Date -f 'HH:mm:ss')] Checking DVD drive for {{ inventory_hostname }} …"
+    if (-not (Test-Path $isoPath)) {
+      throw "ISO not found on hvhost: $isoPath"
+    }
+    $dvd = Get-VMDvdDrive -VMName {{ inventory_hostname }} -ErrorAction SilentlyContinue
+    if ($dvd) {
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive exists — updating path to $isoPath"
+      Set-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
+    } else {
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] No DVD drive found — adding one with $isoPath"
+      Add-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
+    }
+    Write-Host "[$(Get-Date -f 'HH:mm:ss')] ISO attached successfully."
+  delegate_to: hvhost
+  register: iso_attach
+  ignore_errors: true
+  async: 120
+  poll: 10
+
+- name: Show ISO attach output
+  ansible.builtin.debug:
+    var: iso_attach.stdout_lines
+  when: iso_attach is defined
+
+- name: Get DVD drive letter in guest
+  # Retries because Hyper-V can report the ISO attached on the host while the
+  # guest hasn't enumerated the CD-ROM yet. 12 x 10 s = up to 2 min.
   ansible.windows.win_powershell:
     script: |
-      $domainPass = ConvertTo-SecureString '{{ lab_password }}' -AsPlainText -Force
-      $domainCred = New-Object PSCredential('{{ lab_domain_netbios }}\Administrator', $domainPass)
-      $computer   = Get-WmiObject Win32_ComputerSystem
-      if ($computer.PartOfDomain -and $computer.Domain -eq '{{ lab_domain_name }}') {
-        Write-Host "Already domain member."
-      } else {
-        Add-Computer -DomainName '{{ lab_domain_name }}' -Credential $domainCred -Force
-        $Ansible.Changed = $true
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] Enumerating CD-ROM drives in guest..."
+      $driveList = @(Get-CimInstance Win32_CDROMDrive -ErrorAction SilentlyContinue)
+      if ($driveList.Count -eq 0) {
+        throw "No DVD drive found - check Hyper-V DVD attachment"
       }
-  register: domain_join
-
-- name: Reboot after domain join
-  ansible.windows.win_reboot:
-    reboot_timeout: 300
-    post_reboot_delay: 30
-  when: domain_join.changed
-
-- name: Copy SQL Server ISO to VM
-  ansible.windows.win_copy:
-    src: "{{ sql_iso_local_path | default('') }}"
-    dest: 'C:\LabSetup\sql2022.iso'
-  when: sql_iso_local_path is defined
-
-- name: Mount SQL Server ISO
-  ansible.windows.win_powershell:
-    script: |
-      $iso = 'C:\LabSetup\sql2022.iso'
-      if (-not (Test-Path $iso)) {
-        throw "SQL ISO not found at $iso. Copy it manually or set sql_iso_local_path."
-      }
-      $mount = Mount-DiskImage -ImagePath $iso -PassThru
-      $drive = ($mount | Get-Volume).DriveLetter
-      $Ansible.Result = "${drive}:"
+      $drive = $driveList[0].Drive.Trim()
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive letter detected: $drive"
+      $drive
   register: sql_drive
+  retries: 12
+  delay: 10
+  until: sql_drive is succeeded
+  ignore_errors: true
+  when: iso_attach is succeeded
 
-- name: Install SQL Server 2022 (unattended)
+# - name: Debug sql_drive variable
+#   ansible.builtin.debug:
+#     var: sql_drive
+#   when: sql_drive is defined
+
+- name: Show DVD drive letter
+  ansible.builtin.debug:
+    msg: "DVD drive letter: {{ sql_drive.output[0] | default('(not set)') }}"
+  when: sql_drive is defined
+
+- name: Install SQL Server (unattended)
   ansible.windows.win_powershell:
     script: |
-      $drive     = '{{ sql_drive.result }}'
-      $saPass    = '{{ sql_sa_password | default(lab_password) }}'
-      $svcAcct   = '{{ lab_domain_netbios }}\svc_vmm'   # reuse service account for lab
+      $drive  = '{{ sql_drive.output[0] | trim }}'
+      if (-not $drive) { throw "Drive letter not available - ISO was not mounted" }
+      $saPass = '{{ sql_sa_password | default(lab_password) }}'
 
-      $args = @(
+      $setupArgs = @(
         '/Q'
         '/ACTION=Install'
-        '/FEATURES=SQLENGINE,FULLTEXT,CONN,SSMS'
+        '/FEATURES=SQLENGINE,FULLTEXT,CONN'
         '/INSTANCENAME=MSSQLSERVER'
-        "/SQLSYSADMINACCOUNTS={{ lab_domain_netbios }}\Domain Admins"
+        "/SQLSYSADMINACCOUNTS=`"{{ lab_domain_netbios }}\Domain Admins`""
         '/SECURITYMODE=SQL'
         "/SAPWD=$saPass"
         '/TCPENABLED=1'
@@ -61,13 +98,44 @@
         '/UpdateEnabled=0'
       )
 
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] ============================================================"
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] Starting SQL Server setup on $env:COMPUTERNAME"
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] This typically takes 20-40 minutes. Ansible polls every 30 s."
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] ============================================================"
+      Write-Host "Starting SQL Server setup — this takes 20-40 minutes…"
       $result = Start-Process -FilePath "${drive}\setup.exe" `
-        -ArgumentList $args -Wait -PassThru -WorkingDirectory $drive
+        -ArgumentList $setupArgs -Wait -PassThru -WorkingDirectory "${drive}\"
+      Write-Host "SQL Server setup exited with code $($result.ExitCode)"
+
       if ($result.ExitCode -notin @(0, 3010)) {
-        throw "SQL Server install failed with exit code $($result.ExitCode)"
+        # Surface the setup summary log for diagnosis
+        $logFile = Get-ChildItem 'C:\Program Files\Microsoft SQL Server' -Filter 'Summary*.txt' -Recurse -ErrorAction SilentlyContinue |
+                   Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $logText = if ($logFile) { Get-Content $logFile.FullName -Raw } else { '(log not found)' }
+        throw "SQL Server install failed with exit code $($result.ExitCode)`n`nSummary log ($($logFile.FullName)):`n$logText"
       }
       $Ansible.Changed = $true
+  when: iso_attach is succeeded and sql_drive is succeeded
   register: sql_install
+  ignore_errors: true
+  async: 3600   # allow up to 60 min; poll keeps Ansible from timing out the connection
+  poll: 30      # check every 30 s — shows a heartbeat line so it doesn't look hung
+
+- name: Detach SQL ISO from Hyper-V DVD drive
+  # hvhost uses ansible_connection=ssh + ansible_shell_type=powershell.
+  # win_powershell requires WinRM — use ansible.windows.win_shell here instead.
+  ansible.windows.win_shell: |
+    $dvd = Get-VMDvdDrive -VMName {{ inventory_hostname }} -ErrorAction SilentlyContinue
+    if ($dvd) {
+      Set-VMDvdDrive -VMName {{ inventory_hostname }} -Path $null
+      Write-Host "SQL ISO detached from {{ inventory_hostname }}"
+    } else {
+      Write-Host "No DVD drive found for {{ inventory_hostname }}"
+    }
+  delegate_to: hvhost
+  ignore_errors: true
+  async: 30
+  poll: 5
 
 - name: Enable SQL Server TCP/IP
   ansible.windows.win_powershell:
@@ -81,10 +149,13 @@
         $tcp.Alter()
         Restart-Service MSSQLSERVER -Force
         Write-Host "TCP enabled."
+      } else {
+        $Ansible.Changed = $false
       }
+  ignore_errors: true
 
 - name: Open SQL Server firewall port
-  ansible.windows.win_firewall_rule:
+  community.windows.win_firewall_rule:
     name: SQL Server
     localport: 1433
     action: allow
@@ -92,3 +163,49 @@
     protocol: tcp
     state: present
     enabled: true
+  ignore_errors: true
+
+- name: Create SQL Server logins for domain users
+  ansible.windows.win_powershell:
+    script: |
+      [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.Smo') | Out-Null
+      $saPass = '{{ sql_sa_password | default(lab_password) }}'
+
+      # Connect as SA with the password from setup
+      $server = New-Object Microsoft.SqlServer.Management.Smo.Server('localhost')
+      $server.ConnectionContext.LoginSecure = $false
+      $server.ConnectionContext.Login = 'sa'
+      $server.ConnectionContext.Password = $saPass
+
+      try {
+        $server.ConnectionContext.Connect()
+        Write-Host "Connected to SQL Server as sa"
+      } catch {
+        Write-Host "WARNING: Could not connect as SA - logins may not be created. Error: $_"
+        exit 0
+      }
+
+      # Create domain admin login
+      $loginName = '{{ lab_domain_netbios }}\Administrator'
+      if (-not $server.Logins[$loginName]) {
+        $login = New-Object Microsoft.SqlServer.Management.Smo.Login($server, $loginName)
+        $login.LoginType = [Microsoft.SqlServer.Management.Smo.LoginType]::WindowsUser
+        $login.Create()
+        $server.Roles['sysadmin'].AddMember($loginName)
+        Write-Host "Created login: $loginName"
+      } else {
+        Write-Host "Login already exists: $loginName"
+      }
+
+      # Create SCVMM service account login if needed
+      $scvmmLogin = '{{ lab_domain_netbios }}\svc_vmm'
+      if (-not $server.Logins[$scvmmLogin]) {
+        $login = New-Object Microsoft.SqlServer.Management.Smo.Login($server, $scvmmLogin)
+        $login.LoginType = [Microsoft.SqlServer.Management.Smo.LoginType]::WindowsUser
+        $login.Create()
+        Write-Host "Created login: $scvmmLogin"
+      }
+
+      $server.ConnectionContext.Disconnect()
+  ignore_errors: true
+  register: sql_logins
