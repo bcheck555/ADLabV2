@@ -28,6 +28,14 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
           <PlainText>true</PlainText>
         </AdministratorPassword>
       </UserAccounts>
+      <FirstLogonCommands>
+        <!-- Enable Administrator account on deployed VMs after sysprep -->
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <CommandLine>net user Administrator /active:yes</CommandLine>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+      </FirstLogonCommands>
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
         <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
