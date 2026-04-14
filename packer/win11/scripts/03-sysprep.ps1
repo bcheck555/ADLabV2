@@ -16,6 +16,21 @@ $unattendPath = 'C:\Windows\System32\Sysprep\unattend.xml'
 Set-Content $unattendPath -Encoding UTF8 -Value @'
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Deployment"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <RunSynchronous>
+        <!-- Enable Administrator account before OOBE starts on deployed VMs -->
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <CommandLine>net user Administrator /active:yes</CommandLine>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
   <settings pass="oobeSystem">
     <component name="Microsoft-Windows-Shell-Setup"
                processorArchitecture="amd64"
@@ -28,14 +43,6 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
           <PlainText>true</PlainText>
         </AdministratorPassword>
       </UserAccounts>
-      <FirstLogonCommands>
-        <!-- Enable Administrator account on deployed VMs after sysprep -->
-        <SynchronousCommand wcm:action="add">
-          <Order>1</Order>
-          <CommandLine>net user Administrator /active:yes</CommandLine>
-          <RequiresUserInput>false</RequiresUserInput>
-        </SynchronousCommand>
-      </FirstLogonCommands>
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
         <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
@@ -44,6 +51,8 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
         <SkipMachineOOBE>true</SkipMachineOOBE>
       </OOBE>
     </component>
+  </settings>
+  <settings pass="oobeSystem">
   </settings>
 </unattend>
 '@
