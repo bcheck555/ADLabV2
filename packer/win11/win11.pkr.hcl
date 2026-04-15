@@ -59,6 +59,16 @@ variable "ssh_pass" {
   sensitive = true
 }
 
+variable "openssh_msi_path" {
+  type    = string
+  default = "D:\\LabSources\\SoftwarePackages\\OpenSSH-Win64-v9.5.0.0.msi"
+}
+
+variable "ps7_msi_path" {
+  type    = string
+  default = "D:\\LabSources\\SoftwarePackages\\PowerShell-7.6.0-win-x64.msi"
+}
+
 source "hyperv-iso" "win11" {
   vm_name              = var.vm_name
   iso_url              = var.iso_path
@@ -73,7 +83,7 @@ source "hyperv-iso" "win11" {
   switch_name          = var.switch_name
   guest_additions_mode = "disable"
 
-  cd_files  = ["${path.root}/http/autounattend.xml", "${path.root}/http/OpenSSH-Win64-v9.5.0.0.msi", "${path.root}/http/PowerShell-7.6.0-win-x64.msi"]
+  cd_files  = ["${path.root}/http/autounattend.xml", var.openssh_msi_path, var.ps7_msi_path]
   cd_label  = "UNATTEND"
 
   boot_wait    = "1s"
