@@ -32,6 +32,10 @@ docker/.env
 *.pem
 secrets/
 
+# === Executables ===
+*.exe
+*.msi
+
 # === OS / editor ===
 Thumbs.db
 .DS_Store

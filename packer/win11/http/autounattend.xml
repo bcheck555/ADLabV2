@@ -96,27 +96,33 @@
         <Username>Administrator</Username>
       </AutoLogon>
       <FirstLogonCommands>
-        <!-- Set network to Private (required for SSH; OOBE NetworkLocation=Work doesn't stick on Win11) -->
+        <!-- Enable built-in Administrator account before SSH starts (required for Packer SSH communicator) -->
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
+          <CommandLine>net user Administrator /active:yes</CommandLine>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+        <!-- Set network to Private (required for SSH; OOBE NetworkLocation=Work doesn't stick on Win11) -->
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
           <CommandLine>powershell -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private"</CommandLine>
           <RequiresUserInput>false</RequiresUserInput>
         </SynchronousCommand>
         <!-- Install OpenSSH Server from MSI on unattend CD (no internet needed) -->
         <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
+          <Order>3</Order>
           <CommandLine>powershell -Command "$cd = (Get-Volume -FileSystemLabel 'UNATTEND').DriveLetter; Start-Process msiexec -ArgumentList '/i', ('{0}:\OpenSSH-Win64-v9.5.0.0.msi' -f $cd), '/quiet', '/norestart', 'ADDLOCAL=Server' -Wait -NoNewWindow"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>3</Order>
+          <Order>4</Order>
           <CommandLine>powershell -Command "Set-Service sshd -StartupType Automatic; Start-Service sshd"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>4</Order>
+          <Order>5</Order>
           <CommandLine>powershell -Command "New-NetFirewallRule -Name 'sshd' -DisplayName 'OpenSSH Server' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>5</Order>
+          <Order>6</Order>
           <CommandLine>powershell -Command "New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force"</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
