@@ -28,11 +28,9 @@
     TofuExe           = 'D:\Tools\tofu\tofu.exe'     # or 'tofu' if in PATH
 
     # === ISOs ===
-    WS2025ISO         = 'D:\LabSources\ISOs\26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso'
-    Win11ISO          = 'D:\LabSources\ISOs\26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso'
+    WS2025ISO         = 'D:\LabSources\ISOs\Windows_Server_2025_EVAL_x64FRE_en-us.iso'
+    Win11ISO          = 'D:\LabSources\ISOs\Windows_11_Enterprise_EVAL_x64_en-us.iso'
     Ubuntu2404ISO     = 'D:\LabSources\ISOs\ubuntu-24.04.4-live-server-amd64.iso'
-    SqlServerISO      = 'D:\LabSources\SoftwarePackages\enu_sql_server_2022_developer_edition_x64_dvd_7cacf733.iso'
-    ScvmmZip          = 'D:\LabSources\SoftwarePackages\SCVMM_2025.zip'
 
     # === Base VHDs (Packer output) ===
     WS2025BaseVHD     = 'D:\CODE\ADLabV2\base-vhds\ws2025-base.vhdx'

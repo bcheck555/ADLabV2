@@ -35,7 +35,7 @@ Set-ItemProperty $cortanaKey AllowCortana 0
 # --- PowerShell 7 (from UNATTEND CD) ---
 Write-Host 'Installing PowerShell 7...'
 $cdDrive = (Get-Volume -FileSystemLabel 'UNATTEND' -ErrorAction SilentlyContinue).DriveLetter
-$ps7Msi  = if ($cdDrive) { "${cdDrive}:\PowerShell-7.6.0-win-x64.msi" } else { $null }
+$ps7Msi  = if ($cdDrive) { "${cdDrive}:\PowerShell-7.6.6-win-x64.msi" } else { $null }
 if ($ps7Msi -and (Test-Path $ps7Msi)) {
     Start-Process msiexec.exe -ArgumentList "/i `"$ps7Msi`" /quiet /norestart" -Wait
     Write-Host 'PowerShell 7 installed.'

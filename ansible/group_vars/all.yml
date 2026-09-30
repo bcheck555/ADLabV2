@@ -31,7 +31,7 @@ lab_hvhost_ip:  192.168.1.50   # Management IP of the Hyper-V host — update if
 scvmm_product_key: ""   # e.g. "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
 
 # === Software Packages (on Hyper-V host D:\LabSources\SoftwarePackages) ===
-sql_iso_host_path:          'D:\LabSources\SoftwarePackages\SQLServer2025-x64-ENU-StdDev.iso'
+sql_iso_host_path:          'D:\LabSources\SoftwarePackages\SQLServer2022-DEV-x64-ENU.iso'
 scvmm_sources_host_path:    'D:\LabSources\SoftwarePackages'
 
 # === GitLab ===

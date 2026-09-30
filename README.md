@@ -77,27 +77,47 @@ stages installer files over SMB — no manual copying into VMs is needed.
 ```
 D:\LabSources\
 ├── ISOs\
-│   ├── <WS2025 eval ISO>        # Windows Server 2025 Evaluation (Packer)
-│   └── <Win11 eval ISO>         # Windows 11 24H2 Evaluation (Packer)
+│   ├── Windows_Server_2025_EVAL_x64FRE_en-us.iso
+│   ├── Windows_11_Enterprise_EVAL_x64_en-us.iso
+│   └── ubuntu-24.04.4-live-server-amd64.iso
 │
 └── SoftwarePackages\
-    ├── <SQL Server Developer ISO>     # Filename set by sql_iso_host_path in group_vars/all.yml
-    │
-    ├── ADK\                           # Windows ADK offline layout
-    │   └── <any subfolder depth>
-    │       └── adksetup.exe           # Found recursively — subfolder name doesn't matter
-    │
-    ├── ADKWinPE\                      # Windows ADK WinPE add-on offline layout
-    │   └── <any subfolder depth>
-    │       └── adkwinpesetup.exe      # Found recursively
-    │
-    └── SCVMM_2025\                    # SCVMM 2025 installer (extracted, not zipped)
-        └── <any subfolder depth>
-            └── setup.exe              # Found recursively — subfolder name doesn't matter
+    ├── SQLServer2022-DEV-x64-ENU.iso
+    ├── OpenSSH-Win64-v10.0.0.0.msi
+    ├── PowerShell-7.6.6-win-x64.msi
+    ├── msodbcsql.msi
+    ├── MsSqlCmdLnUtils.msi
+    ├── ADK\
+    │   └── adksetup.exe
+    ├── ADKWinPE\
+    │   └── adkwinpesetup.exe
+    └── SCVMM2025\
+        ├── setup.exe
+        └── Prerequisites\
 ```
 
 **ISO and package paths** are configured in `ansible/group_vars/all.yml` (`sql_iso_host_path`) and
-`config/lab.config.psd1` (Packer ISO paths). Update those variables if your filenames differ.
+`config/lab.config.psd1` (Packer ISO paths). The SCVMM role requires `setup.exe`
+directly under `SoftwarePackages\SCVMM2025`.
+
+Populate and validate the complete tree from an elevated Windows PowerShell prompt:
+
+```powershell
+.\Populate-LabSources.ps1
+
+# Validate existing media without downloading anything
+.\Populate-LabSources.ps1 -ValidateOnly
+```
+
+Use `-WindowsServerIsoPath`, `-Windows11IsoPath`, `-SqlServerIsoPath`, or
+`-ScvmmMediaPath` to supply locally downloaded or licensed media. Downloads are resumable,
+and existing verified files are preserved unless `-Force` is specified. The script writes
+`SHA256SUMS.txt`, `INVENTORY.txt`, and `LabSources.inventory.json` under
+`D:\LabSources`.
+
+Microsoft requires interactive registration for the Windows 11 Enterprise evaluation. Download
+that ISO from the Evaluation Center first and pass it with `-Windows11IsoPath`; subsequent
+runs reuse the staged, validated ISO without requiring the parameter.
 
 **Creating the ADK offline layout** (run once on any internet-connected machine, then copy to the host):
 

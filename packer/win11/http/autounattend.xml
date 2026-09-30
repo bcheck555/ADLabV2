@@ -68,7 +68,7 @@
       <ComputerName>PACKER-WIN11</ComputerName>
       <TimeZone>UTC</TimeZone>
     </component>
-    <!-- Set static IP before OOBE so Win11 24H2 doesn't hang at network screen.
+    <!-- Set static IP before OOBE so Windows 11 Enterprise setup doesn't hang at the network screen.
          PackerSwitch has no DHCP — without an IP OOBE blocks on "connect to network". -->
     <component name="Microsoft-Windows-Deployment"
                processorArchitecture="amd64"
@@ -111,7 +111,7 @@
         <!-- Install OpenSSH Server from MSI on unattend CD (no internet needed) -->
         <SynchronousCommand wcm:action="add">
           <Order>3</Order>
-          <CommandLine>powershell -Command "$cd = (Get-Volume -FileSystemLabel 'UNATTEND').DriveLetter; Start-Process msiexec -ArgumentList '/i', ('{0}:\OpenSSH-Win64-v9.5.0.0.msi' -f $cd), '/quiet', '/norestart', 'ADDLOCAL=Server' -Wait -NoNewWindow"</CommandLine>
+                    <CommandLine>powershell -Command "$cd = (Get-Volume -FileSystemLabel 'UNATTEND').DriveLetter; Start-Process msiexec -ArgumentList '/i', ('{0}:\OpenSSH-Win64-v10.0.0.0.msi' -f $cd), '/quiet', '/norestart', 'ADDLOCAL=Server' -Wait -NoNewWindow"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>4</Order>

@@ -15,7 +15,7 @@ variable "vm_name" {
 
 variable "iso_path" {
   type    = string
-  default = "D:\\LabSources\\ISOs\\26100.32230.260111-0550.lt_release_svc_refresh_SERVER_EVAL_x64FRE_en-us.iso"
+  default = "D:\\LabSources\\ISOs\\Windows_Server_2025_EVAL_x64FRE_en-us.iso"
 }
 
 variable "iso_checksum" {
@@ -60,22 +60,22 @@ variable "ssh_pass" {
 }
 
 source "hyperv-iso" "ws2025" {
-  vm_name              = var.vm_name
-  iso_url              = var.iso_path
-  iso_checksum         = var.iso_checksum
-  output_directory     = var.output_dir
-  disk_size            = var.disk_size
-  memory               = var.memory
-  cpus                 = var.cpu_count
-  generation           = 2
-  enable_secure_boot   = false
+  vm_name               = var.vm_name
+  iso_url               = var.iso_path
+  iso_checksum          = var.iso_checksum
+  output_directory      = var.output_dir
+  disk_size             = var.disk_size
+  memory                = var.memory
+  cpus                  = var.cpu_count
+  generation            = 2
+  enable_secure_boot    = false
   enable_dynamic_memory = false
-  switch_name          = var.switch_name
-  guest_additions_mode = "disable"
+  switch_name           = var.switch_name
+  guest_additions_mode  = "disable"
 
   # cd_files injects autounattend.xml for unattended install
-  cd_files  = ["${path.root}/http/autounattend.xml"]
-  cd_label  = "UNATTEND"
+  cd_files = ["${path.root}/http/autounattend.xml"]
+  cd_label = "UNATTEND"
 
   boot_wait    = "1s"
   boot_command = ["<enter><wait><enter><wait><enter><wait><enter>"]

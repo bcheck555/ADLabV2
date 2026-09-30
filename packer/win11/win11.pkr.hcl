@@ -15,7 +15,7 @@ variable "vm_name" {
 
 variable "iso_path" {
   type    = string
-  default = "D:\\LabSources\\ISOs\\26200.6584.250915-1905.25h2_ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso"
+  default = "D:\\LabSources\\ISOs\\Windows_11_Enterprise_EVAL_x64_en-us.iso"
 }
 
 variable "iso_checksum" {
@@ -61,30 +61,30 @@ variable "ssh_pass" {
 
 variable "openssh_msi_path" {
   type    = string
-  default = "D:\\LabSources\\SoftwarePackages\\OpenSSH-Win64-v9.5.0.0.msi"
+  default = "D:\\LabSources\\SoftwarePackages\\OpenSSH-Win64-v10.0.0.0.msi"
 }
 
 variable "ps7_msi_path" {
   type    = string
-  default = "D:\\LabSources\\SoftwarePackages\\PowerShell-7.6.0-win-x64.msi"
+  default = "D:\\LabSources\\SoftwarePackages\\PowerShell-7.6.6-win-x64.msi"
 }
 
 source "hyperv-iso" "win11" {
-  vm_name              = var.vm_name
-  iso_url              = var.iso_path
-  iso_checksum         = var.iso_checksum
-  output_directory     = var.output_dir
-  disk_size            = var.disk_size
-  memory               = var.memory
-  cpus                 = var.cpu_count
-  generation           = 2
-  enable_secure_boot   = false
+  vm_name               = var.vm_name
+  iso_url               = var.iso_path
+  iso_checksum          = var.iso_checksum
+  output_directory      = var.output_dir
+  disk_size             = var.disk_size
+  memory                = var.memory
+  cpus                  = var.cpu_count
+  generation            = 2
+  enable_secure_boot    = false
   enable_dynamic_memory = false
-  switch_name          = var.switch_name
-  guest_additions_mode = "disable"
+  switch_name           = var.switch_name
+  guest_additions_mode  = "disable"
 
-  cd_files  = ["${path.root}/http/autounattend.xml", var.openssh_msi_path, var.ps7_msi_path]
-  cd_label  = "UNATTEND"
+  cd_files = ["${path.root}/http/autounattend.xml", var.openssh_msi_path, var.ps7_msi_path]
+  cd_label = "UNATTEND"
 
   boot_wait    = "1s"
   boot_command = ["<enter><wait><enter><wait><enter><wait><enter>"]
