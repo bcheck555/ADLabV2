@@ -118,6 +118,29 @@ function Assert-MicrosoftSignature {
     }
 }
 
+function Test-ZipHeader {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
+    }
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $header = New-Object byte[] 4
+        if ($stream.Read($header, 0, $header.Length) -ne $header.Length) {
+            return $false
+        }
+        return $header[0] -eq 0x50 -and $header[1] -eq 0x4B -and
+            (($header[2] -eq 0x03 -and $header[3] -eq 0x04) -or
+             ($header[2] -eq 0x05 -and $header[3] -eq 0x06) -or
+             ($header[2] -eq 0x07 -and $header[3] -eq 0x08))
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Receive-BitsFile {
     param(
         [Parameter(Mandatory)][string]$Uri,
@@ -327,8 +350,14 @@ function Install-ScvmmMedia {
                 $ScvmmMediaPath
             }
             else {
-                $downloaded = Join-Path $stagingDirectory 'SCVMM_2025.exe'
-                Get-Artifact -Name 'SCVMM 2025 evaluation package' -Destination $downloaded -Uri $sourceUrls.Scvmm -Version '2025' -MicrosoftSigned
+                $downloaded = Join-Path $stagingDirectory 'SCVMM_2025.zip'
+                $legacyDownload = Join-Path $stagingDirectory 'SCVMM_2025.exe'
+                if (-not (Test-Path -LiteralPath $downloaded -PathType Leaf) -and
+                    (Test-ZipHeader -Path $legacyDownload)) {
+                    Write-Step 'Reusing previously downloaded SCVMM ZIP with corrected extension'
+                    Move-Item -LiteralPath $legacyDownload -Destination $downloaded
+                }
+                Get-Artifact -Name 'SCVMM 2025 evaluation package' -Destination $downloaded -Uri $sourceUrls.Scvmm -Version '2025'
                 $downloaded
             }
 
