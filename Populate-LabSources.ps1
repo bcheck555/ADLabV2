@@ -49,7 +49,7 @@ $sourceUrls = [ordered]@{
     Ubuntu        = 'https://releases.ubuntu.com/24.04.4/ubuntu-24.04.4-live-server-amd64.iso'
     PowerShell    = 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/PowerShell-7.6.6-win-x64.msi'
     OpenSSH       = 'https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi'
-    SqlBootstrap  = 'https://go.microsoft.com/fwlink/?linkid=2215202&clcid=0x409&culture=en-us&country=us'
+    SqlServer     = 'https://www.microsoft.com/en-us/evalcenter/download-sql-server-2022'
     Odbc          = 'https://go.microsoft.com/fwlink/?linkid=2378279'
     SqlCmd        = 'https://go.microsoft.com/fwlink/?linkid=2370127'
     Adk           = 'https://go.microsoft.com/fwlink/?linkid=2289980'
@@ -303,40 +303,7 @@ function Install-OfflineLayout {
 
 function Install-SqlServerMedia {
     $destination = $paths.SqlServer
-    if ($Force -or -not (Test-Path -LiteralPath $destination -PathType Leaf)) {
-        if ($ValidateOnly) {
-            throw "SQL Server media is missing: $destination"
-        }
-        if ($SqlServerIsoPath) {
-            Get-Artifact -Name 'SQL Server 2022 Developer' -Destination $destination -LocalPath $SqlServerIsoPath -Version '2022 Developer'
-            return
-        }
-
-        $bootstrapper = Join-Path $stagingDirectory 'SQL2022-SSEI-Dev.exe'
-        Get-Artifact -Name 'SQL Server 2022 media downloader' -Destination $bootstrapper -Uri $sourceUrls.SqlBootstrap -Version '2022' -MicrosoftSigned
-        $downloadDirectory = Join-Path $stagingDirectory 'sql2022-media'
-        if (Test-Path -LiteralPath $downloadDirectory) {
-            Remove-Item -LiteralPath $downloadDirectory -Recurse -Force
-        }
-        New-Item -Path $downloadDirectory -ItemType Directory -Force | Out-Null
-        $quotedPath = '"' + $downloadDirectory + '"'
-        Write-Step 'Downloading SQL Server 2022 Developer ISO'
-        $process = Start-Process -FilePath $bootstrapper -ArgumentList "/Action=Download /MediaType=ISO /MediaPath=$quotedPath /Quiet" -Wait -PassThru
-        if ($process.ExitCode -ne 0) {
-            throw "SQL Server media download failed with exit code $($process.ExitCode). Supply -SqlServerIsoPath to use local media."
-        }
-        $downloadedIso = Get-ChildItem -LiteralPath $downloadDirectory -Filter '*.iso' -File -Recurse |
-            Sort-Object Length -Descending |
-            Select-Object -First 1
-        if (-not $downloadedIso) {
-            throw "SQL Server downloader did not produce an ISO. Supply -SqlServerIsoPath to use local media."
-        }
-        Move-Item -LiteralPath $downloadedIso.FullName -Destination $destination -Force
-    }
-
-    if (-not ($inventory | Where-Object Name -eq 'SQL Server 2022 Developer')) {
-        Get-Artifact -Name 'SQL Server 2022 Developer' -Destination $destination -Uri $sourceUrls.SqlBootstrap -Version '2022 Developer'
-    }
+    Get-Artifact -Name 'SQL Server 2022 Developer' -Destination $destination -Uri $sourceUrls.SqlServer -LocalPath $SqlServerIsoPath -Version '2022 Developer'
 }
 
 function Install-ScvmmMedia {
@@ -495,6 +462,9 @@ if (-not $ValidateOnly) {
 
 if (($Force -or -not (Test-Path -LiteralPath $paths.Windows11 -PathType Leaf)) -and -not $Windows11IsoPath) {
     throw "Microsoft requires interactive registration for the Windows 11 Enterprise evaluation ISO. Download it from $($sourceUrls.Windows11), then rerun with -Windows11IsoPath."
+}
+if (($Force -or -not (Test-Path -LiteralPath $paths.SqlServer -PathType Leaf)) -and -not $SqlServerIsoPath) {
+    throw "Microsoft has retired the public SQL Server 2022 media bootstrapper. Obtain a SQL Server 2022 Developer ISO from an authorized Microsoft download channel, then rerun with -SqlServerIsoPath."
 }
 Get-Artifact -Name 'Windows Server 2025 Evaluation' -Destination $paths.WindowsServer -Uri $sourceUrls.WindowsServer -LocalPath $WindowsServerIsoPath -Version '2025 Evaluation'
 Get-Artifact -Name 'Windows 11 Enterprise Evaluation' -Destination $paths.Windows11 -Uri $sourceUrls.Windows11 -LocalPath $Windows11IsoPath -Version 'Current x64 Evaluation'

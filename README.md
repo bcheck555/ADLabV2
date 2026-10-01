@@ -119,6 +119,11 @@ Microsoft requires interactive registration for the Windows 11 Enterprise evalua
 that ISO from the Evaluation Center first and pass it with `-Windows11IsoPath`; subsequent
 runs reuse the staged, validated ISO without requiring the parameter.
 
+Microsoft has retired the public SQL Server 2022 web bootstrapper. Obtain a SQL Server 2022
+Developer ISO from an authorized Microsoft download channel and pass it with
+`-SqlServerIsoPath`. Once staged as `SoftwarePackages\SQLServer2022-DEV-x64-ENU.iso`,
+subsequent runs reuse it without requiring the parameter.
+
 **Creating the ADK offline layout** (run once on any internet-connected machine, then copy to the host):
 
 ```powershell
