@@ -50,7 +50,7 @@ The layering (Packer > Tofu > Ansible) is clean and each tool owns its lane.
 | Q1 | Build-WS2025.ps1 | Adds PackerExe dir to PATH but then calls bare packer, not the configured path. | Medium |
 | Q2 | Destroy-Lab.ps1 | tofu destroy does not pass -var=host_password, so it will prompt or fail if terraform.tfvars is missing. | Medium |
 | Q3 | Setup-Packer.ps1 | Step 3/3 label says Checking OpenTofu but should say Checking Packer. Never checks for packer at all. | Low |
-| Q4 | Check-Prerequisites.ps1 | Uses head -1 (Unix command) which breaks in native PowerShell. | Medium |
+| Q4 | Check-Prerequisites.ps1 | ~~Used head -1 (Unix command), breaking native PowerShell.~~ **Fixed:** uses PowerShell-native output selection and checks Docker engine availability separately from CLI installation. | Medium |
 
 ### Packer Templates
 

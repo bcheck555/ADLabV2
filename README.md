@@ -410,7 +410,6 @@ sudo gitlab-ctl start
 
 - **Destroy-Lab.ps1** removes VMs directly; use the `terraform:destroy` CI job for provider-managed cleanup.
 - **`Setup-Packer.ps1`** step 3/3 label says "Checking OpenTofu" but should say "Checking Packer" — and never actually validates the Packer binary is present.
-- **`Check-Prerequisites.ps1`** uses `head -1` (Unix) which breaks in native PowerShell.
 - **`Build-WS2025.ps1`** adds the Packer exe directory to `$PATH` but then calls bare `packer`, not the configured path.
 
 ### Housekeeping

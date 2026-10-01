@@ -9,11 +9,23 @@ Write-Host "`n=== ADLabV2 Prerequisites Check ===" -ForegroundColor Cyan
 
 # 1. Hyper-V
 Write-Host "`n[1/5] Hyper-V Feature..." -NoNewline
-$hvFeature = Get-WindowsOptionalFeature -FeatureName Hyper-V -Online
-if ($hvFeature.State -eq 'Enabled') {
-    Write-Host " OK" -ForegroundColor Green
+$hvState = $null
+if (Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) {
+    # Windows Server exposes roles and features through ServerManager.
+    $hvFeature = Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue
+    if ($hvFeature) { $hvState = [string]$hvFeature.InstallState }
 } else {
-    Write-Host " MISSING (State: $($hvFeature.State))" -ForegroundColor Red
+    # Windows client editions expose optional features through DISM.
+    $hvFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -ErrorAction SilentlyContinue
+    if ($hvFeature) { $hvState = [string]$hvFeature.State }
+}
+
+if ($hvState -in @('Installed', 'Enabled')) {
+    Write-Host " OK ($hvState)" -ForegroundColor Green
+} elseif ($hvState) {
+    Write-Host " MISSING (State: $hvState)" -ForegroundColor Red
+} else {
+    Write-Host " UNKNOWN (unable to query feature state)" -ForegroundColor Yellow
 }
 
 # 2. Lab switch
@@ -30,8 +42,14 @@ if ($switch) {
 Write-Host "[3/5] OpenTofu..." -NoNewline
 $tofu = (Get-Command tofu -ErrorAction SilentlyContinue)
 if ($tofu) {
-    $version = & tofu version 2>&1 | head -1
-    Write-Host " OK ($version)" -ForegroundColor Green
+    $tofuOutput = & $tofu.Source version 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $version = $tofuOutput | Select-Object -First 1
+        Write-Host " OK ($version)" -ForegroundColor Green
+    } else {
+        Write-Host " FOUND, VERSION CHECK FAILED" -ForegroundColor Yellow
+        Write-Host "       → Check that tofu.exe can run from this PowerShell session." -ForegroundColor Yellow
+    }
 } else {
     Write-Host " MISSING" -ForegroundColor Red
     Write-Host "       → Download from: https://opentofu.org/download/" -ForegroundColor Yellow
@@ -41,8 +59,15 @@ if ($tofu) {
 Write-Host "[4/5] Docker..." -NoNewline
 $docker = (Get-Command docker -ErrorAction SilentlyContinue)
 if ($docker) {
-    $version = & docker version --format '{{.Server.Version}}' 2>&1
-    Write-Host " OK ($version)" -ForegroundColor Green
+    $cliVersion = & $docker.Source --version 2>&1
+    if ($LASTEXITCODE -ne 0) { $cliVersion = 'Docker CLI found' }
+    $engineVersion = & $docker.Source version --format '{{.Server.Version}}' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $engineVersion) {
+        Write-Host " OK ($cliVersion; Engine $engineVersion)" -ForegroundColor Green
+    } else {
+        Write-Host " INSTALLED ($cliVersion), ENGINE UNAVAILABLE" -ForegroundColor Yellow
+        Write-Host "       → Start Docker Desktop or the Docker Engine service before building." -ForegroundColor Yellow
+    }
 } else {
     Write-Host " MISSING" -ForegroundColor Red
     Write-Host "       → Install Docker Desktop" -ForegroundColor Yellow
