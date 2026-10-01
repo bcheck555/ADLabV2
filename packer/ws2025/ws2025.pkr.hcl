@@ -55,8 +55,12 @@ variable "ssh_user" {
 
 variable "ssh_pass" {
   type      = string
-  default   = "P@ssw0rd!Lab1"
   sensitive = true
+}
+
+locals {
+  # Escape user-supplied characters before inserting the password into XML.
+  xml_password = replace(replace(replace(replace(replace(var.ssh_pass, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&apos;")
 }
 
 source "hyperv-iso" "ws2025" {
@@ -73,8 +77,11 @@ source "hyperv-iso" "ws2025" {
   switch_name           = var.switch_name
   guest_additions_mode  = "disable"
 
-  # cd_files injects autounattend.xml for unattended install
-  cd_files = ["${path.root}/http/autounattend.xml"]
+  cd_content = {
+    "Autounattend.xml" = templatefile("${path.root}/http/autounattend.xml.tmpl", {
+      password = local.xml_password
+    })
+  }
   cd_label = "UNATTEND"
 
   boot_wait    = "1s"

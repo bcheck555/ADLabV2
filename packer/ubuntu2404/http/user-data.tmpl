@@ -30,14 +30,12 @@ autoinstall:
   identity:
     hostname: ubuntu-packer
     username: labadmin
-    # Password: P@ssw0rd!Lab1 (hashed with: openssl passwd -6 -salt AWI7uSPefmik0xf)
-    password: "$6$AWI7uSPefmik0xf$jN/LsqGCE0HmhCKqVp4iejh4L/KoXw.KcRjWl858pyxlv2Usjn0PZXvZpIezc9a1foHyfDDa6tWBeK6u.nXvM."
+    password: ${password_hash}
   ssh:
     install-server: true
     allow-pw: true
   late-commands:
     # Belt-and-suspenders: force-set the password and ensure account is unlocked
-    - curtin in-target --target=/target -- bash -c "echo 'labadmin:P@ssw0rd!Lab1' | chpasswd"
     - curtin in-target --target=/target -- passwd -u labadmin || true
     # Allow labadmin passwordless sudo for Ansible
     - echo 'labadmin ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/labadmin
@@ -50,3 +48,4 @@ autoinstall:
     - curtin in-target --target=/target -- systemctl mask apt-daily.service apt-daily-upgrade.service || true
   user-data:
     disable_root: true
+

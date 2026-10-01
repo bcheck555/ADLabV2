@@ -55,8 +55,12 @@ variable "ssh_user" {
 
 variable "ssh_pass" {
   type      = string
-  default   = "P@ssw0rd!Lab1"
   sensitive = true
+}
+
+locals {
+  # Escape user-supplied characters before inserting the password into XML.
+  xml_password = replace(replace(replace(replace(replace(var.ssh_pass, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&apos;")
 }
 
 variable "openssh_msi_path" {
@@ -83,7 +87,12 @@ source "hyperv-iso" "win11" {
   switch_name           = var.switch_name
   guest_additions_mode  = "disable"
 
-  cd_files = ["${path.root}/http/autounattend.xml", var.openssh_msi_path, var.ps7_msi_path]
+  cd_files = [var.openssh_msi_path, var.ps7_msi_path]
+  cd_content = {
+    "Autounattend.xml" = templatefile("${path.root}/http/autounattend.xml.tmpl", {
+      password = local.xml_password
+    })
+  }
   cd_label = "UNATTEND"
 
   boot_wait    = "1s"

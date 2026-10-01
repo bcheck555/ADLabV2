@@ -1,8 +1,8 @@
-# Copy this file to terraform.tfvars and replace the password placeholder.
+# Copy this file to terraform.tfvars for non-secret host settings.
 # terraform.tfvars is ignored by Git and must never be committed.
 
 host_user     = "Administrator"
-host_password = "REPLACE_WITH_ROTATED_PASSWORD"
+# Provide host_password through TF_VAR_host_password from AD_LAB_ADMIN_PASSWORD.
 
 # Defaults match the host layout created by ad-hyperv-lab.
 vm_dir       = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2"

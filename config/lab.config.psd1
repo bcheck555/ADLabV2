@@ -37,22 +37,11 @@
     Win11BaseVHD      = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images\win11-base.vhdx'
     Ubuntu2404BaseVHD = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images\ubuntu2404-base.vhdx'
 
-    # === Credentials (lab use only — not production) ===
+    # === Non-secret account names ===
     LocalAdminUser    = 'Administrator'
-    LocalAdminPass    = 'P@ssw0rd!Lab1'
-
     DomainAdminUser   = 'LAB\Administrator'
-    DomainAdminPass   = 'P@ssw0rd!Lab1'
-
-    DSRMPass          = 'P@ssw0rd!DSRM1'
-    SqlSAPass         = 'P@ssw0rd!SA1'
-
     VmmSvcUser        = 'svc_vmm'
-    VmmSvcPass        = 'P@ssw0rd!VMM1'
-
-    # Linux VM credentials (GIT01)
     LinuxUser         = 'labadmin'
-    LinuxPass         = 'P@ssw0rd!Lab1'
 
     # === VM Definitions ===
     # ParentVHD: 'WS2025' | 'Win11' | 'Ubuntu2404'

@@ -25,12 +25,12 @@ The layering (Packer > Tofu > Ansible) is clean and each tool owns its lane.
 
 | # | File | Issue | Fix |
 |---|------|-------|-----|
-| S1 | config/lab.config.psd1 | **Plaintext passwords committed to git** - LocalAdminPass, DomainAdminPass, DSRMPass, SqlSAPass, VmmSvcPass, LinuxPass are all in cleartext in a tracked file. | Move credentials to a gitignored file. The .gitignore already excludes terraform.tfvars - apply the same treatment here. |
-| S2 | terraform/terraform.tfvars | **Hyper-V host admin password** in an untracked file, but present in the working tree. Risk of accidental commit. | Already gitignored (good). Add a terraform.tfvars.example with placeholder values. |
-| S3 | ansible/group_vars/all.yml | **Plaintext passwords committed** - lab_password, lab_dsrm_password, gitlab_root_password. Comments say VAULT THIS but it has not been done. | Encrypt with ansible-vault encrypt_string or use a vault-encrypted vars file. |
-| S4 | packer/*/pkr.hcl | Default value for ssh_pass is the lab password in cleartext. Marked sensitive=true (good), but the default leaks intent. | Remove defaults; require -var or .auto.pkrvars.hcl (gitignored). |
-| S5 | packer/ws2025/http/autounattend.xml | Admin password in plaintext XML. Unavoidable for unattended installs, but the file is git-tracked. | Acknowledge in README or generate dynamically. |
-| S6 | packer/ubuntu2404/http/user-data | Plaintext password in late-commands (chpasswd). The hashed identity.password above is fine, but the late-command undoes that protection. | Remove the cleartext chpasswd line; use chpasswd -e with the hash if needed. |
+| S1 | config/lab.config.psd1 | ~~Plaintext lab credentials tracked in config.~~ **Fixed:** passwords now come from `AD_LAB_ADMIN_PASSWORD` at runtime. | Keep passwords out of tracked config and rotate the shared lab password. |
+| S2 | terraform/terraform.tfvars | ~~Host password stored in local Terraform variables file.~~ **Fixed:** `host_password` is supplied through `TF_VAR_host_password`; the example contains only non-secret settings. | Keep `terraform.tfvars` ignored. |
+| S3 | ansible/group_vars/all.yml | ~~Plaintext service and admin passwords tracked in Ansible variables.~~ **Fixed:** password variables read `AD_LAB_ADMIN_PASSWORD` from the process environment. | Ensure Docker and GitLab jobs pass the masked variable. |
+| S4 | packer/*/pkr.hcl | ~~Default Packer password tracked in templates.~~ **Fixed:** `ssh_pass` is required and supplied through `PKR_VAR_ssh_pass`. | Keep Packer password defaults absent. |
+| S5 | packer/*/http/autounattend.xml | ~~Administrator password embedded in tracked answer files.~~ **Fixed:** answer files are rendered from password templates at build time. | Do not commit rendered answer media. |
+| S6 | packer/ubuntu2404/http/user-data | ~~Plaintext password reset in cloud-init late commands.~~ **Fixed:** the cloud-init template receives a runtime bcrypt hash; no plaintext reset command remains. | Keep the installer template free of credentials. |
 
 ### HIGH
 

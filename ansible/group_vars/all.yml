@@ -1,13 +1,12 @@
 ---
 # group_vars/all.yml — Variables shared across all hosts
-# Credentials should be encrypted with ansible-vault in production.
-# Run: ansible-vault encrypt_string 'P@ssw0rd!Lab1' --name 'lab_password'
+# The password is supplied at runtime via AD_LAB_ADMIN_PASSWORD.
 
 # === Domain ===
 lab_domain_name:    lab.local
 lab_domain_netbios: LAB
 lab_domain_dn:      DC=lab,DC=local
-lab_dsrm_password:  "P@ssw0rd!DSRM1"   # VAULT THIS
+lab_dsrm_password:  "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"
 
 # === Network ===
 lab_gateway:     192.168.100.1
@@ -17,10 +16,10 @@ lab_subnet_mask: 255.255.255.0
 lab_prefix_len:  24
 
 # === Common credentials (lab only) ===
-lab_password: "P@ssw0rd!Lab1"   # VAULT THIS
+lab_password: "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"
 
 # === SQL Server ===
-sql_sa_password: "P@ssw0rd!SA1"   # VAULT THIS
+sql_sa_password: "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"
 
 # === Hyper-V host ===
 lab_hvhost_ip:  192.168.1.50   # Management IP of the Hyper-V host — update if different
@@ -37,4 +36,4 @@ scvmm_sources_host_path:    'D:\LabSources\SoftwarePackages'
 # === GitLab ===
 gitlab_external_url: "http://192.168.100.5"
 gitlab_version:      "17.6.1"   # Pin to a specific CE release
-gitlab_root_password: "P@ssw0rd!Lab1"   # VAULT THIS
+gitlab_root_password: "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"

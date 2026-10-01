@@ -57,7 +57,6 @@ variable "ssh_user" {
 
 variable "ssh_pass" {
   type      = string
-  default   = "P@ssw0rd!Lab1"
   sensitive = true
 }
 
@@ -77,10 +76,12 @@ source "hyperv-iso" "ubuntu2404" {
 
   # Ubuntu autoinstall cloud-init user-data delivered via cidata CD (no HTTP needed)
   cd_label = "cidata"
-  cd_files = [
-    "${path.root}/http/user-data",
-    "${path.root}/http/meta-data"
-  ]
+  cd_files = ["${path.root}/http/meta-data"]
+  cd_content = {
+    "user-data" = templatefile("${path.root}/http/user-data.tmpl", {
+      password_hash = bcrypt(var.ssh_pass)
+    })
+  }
   boot_command = [
     "c<wait>",
     "linux /casper/vmlinuz autoinstall ip=10.0.0.2::10.0.0.1:255.255.255.0:ubuntu-packer:eth0:off ds=nocloud ---<enter><wait>",

@@ -12,6 +12,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $LabRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $cfg = Import-PowerShellDataFile "$LabRoot\config\lab.config.psd1"
+if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) {
+    throw 'Set AD_LAB_ADMIN_PASSWORD in this PowerShell process before building the image.'
+}
 
 if (-not $PackerDir) { $PackerDir = Join-Path $cfg.PackerDir 'win11' }
 $OutputDir = Join-Path $PackerDir 'output'
@@ -36,14 +39,24 @@ $packerLog  = Join-Path $env:TEMP 'packer-win11.log'
 $packerNul  = Join-Path $env:TEMP 'packer-win11.nul'
 # Create an empty file for stdin so Start-Process doesn't close the handle (causes EOF)
 [IO.File]::WriteAllText($packerNul, '')
-$packerArgs = "build -var `"iso_path=$($cfg.Win11ISO)`" -var `"output_dir=$OutputDir`" -var `"switch_name=$($cfg.PackerSwitch)`" -var `"ssh_pass=$($cfg.LocalAdminPass)`" `"$PackerDir`""
-$packer = Start-Process -FilePath 'packer' `
-                        -ArgumentList $packerArgs `
-                        -PassThru `
-                        -RedirectStandardInput  $packerNul `
-                        -RedirectStandardOutput $packerLog `
-                        -RedirectStandardError  "$packerLog.err" `
-                        -NoNewWindow
+$packerArgs = "build -var `"iso_path=$($cfg.Win11ISO)`" -var `"output_dir=$OutputDir`" -var `"switch_name=$($cfg.PackerSwitch)`" `"$PackerDir`""
+$previousPackerPassword = [Environment]::GetEnvironmentVariable('PKR_VAR_ssh_pass', 'Process')
+$env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
+try {
+    $packer = Start-Process -FilePath 'packer' `
+                            -ArgumentList $packerArgs `
+                            -PassThru `
+                            -RedirectStandardInput  $packerNul `
+                            -RedirectStandardOutput $packerLog `
+                            -RedirectStandardError  "$packerLog.err" `
+                            -NoNewWindow
+} finally {
+    if ($null -eq $previousPackerPassword) {
+        Remove-Item Env:PKR_VAR_ssh_pass -ErrorAction SilentlyContinue
+    } else {
+        $env:PKR_VAR_ssh_pass = $previousPackerPassword
+    }
+}
 
 Write-Host "  Packer PID: $($packer.Id)"
 Write-Host "  Polling for VM '$VMName' to appear so we can enable vTPM..."

@@ -18,6 +18,7 @@ services:
       - ANSIBLE_CONFIG=/ansible/ansible.cfg
       - ANSIBLE_HOST_KEY_CHECKING=False
       - ANSIBLE_RETRY_FILES_ENABLED=False
+      - AD_LAB_ADMIN_PASSWORD
       # Uncomment and set if using ansible-vault:
       # - ANSIBLE_VAULT_PASSWORD_FILE=/ansible/.vault_pass
 

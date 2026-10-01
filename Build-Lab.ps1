@@ -11,7 +11,7 @@
 #   - LabNAT Hyper-V switch exists (created by the ad-hyperv-lab Ansible playbook)
 #   - tofu.exe in PATH
 #   - Docker Desktop running (bootstrap only - GIT01 takes over after first run)
-#   - terraform/terraform.tfvars populated with host_password
+#   - AD_LAB_ADMIN_PASSWORD set in this PowerShell process
 #   - For Docker to reach lab VMs: add a route manually if needed:
 #       $gw = (Get-NetIPAddress -InterfaceAlias 'vEthernet (DockerNAT)' -AddressFamily IPv4).IPAddress
 #       route add 192.168.100.0 MASK 255.255.255.0 $gw
@@ -37,6 +37,9 @@ function Write-Step([string]$msg) {
 Write-Step 'Checking prerequisites'
 
 $cfg = Import-PowerShellDataFile "$LabRoot\config\lab.config.psd1"
+if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) {
+    throw 'Set AD_LAB_ADMIN_PASSWORD in this PowerShell process before building the lab.'
+}
 
 foreach ($vhd in @($cfg.WS2025BaseVHD, $cfg.Win11BaseVHD, $cfg.Ubuntu2404BaseVHD)) {
     if (-not (Test-Path $vhd)) {
@@ -54,10 +57,17 @@ if (-not $switch) {
 if (-not $SkipTofu) {
     Write-Step 'Running OpenTofu (creating VMs)'
     Push-Location "$LabRoot\terraform"
+    $previousTfPassword = [Environment]::GetEnvironmentVariable('TF_VAR_host_password', 'Process')
+    $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD
     try {
         & tofu apply -input=false -auto-approve -parallelism=5
         if ($LASTEXITCODE -ne 0) { throw "tofu apply failed" }
     } finally {
+        if ($null -eq $previousTfPassword) {
+            Remove-Item Env:TF_VAR_host_password -ErrorAction SilentlyContinue
+        } else {
+            $env:TF_VAR_host_password = $previousTfPassword
+        }
         Pop-Location
     }
 } else {
@@ -90,11 +100,11 @@ if (-not $SkipNetworkBootstrap) {
 
     $ws2025Cred = New-Object PSCredential(
         $cfg.LocalAdminUser,
-        (ConvertTo-SecureString $cfg.LocalAdminPass -AsPlainText -Force)
+        (ConvertTo-SecureString $env:AD_LAB_ADMIN_PASSWORD -AsPlainText -Force)
     )
     $win11Cred = New-Object PSCredential(
         $cfg.LocalAdminUser,   # Use Administrator for Win11 as well
-        (ConvertTo-SecureString $cfg.LocalAdminPass -AsPlainText -Force)
+        (ConvertTo-SecureString $env:AD_LAB_ADMIN_PASSWORD -AsPlainText -Force)
     )
 
     foreach ($vm in $cfg.VMs) {

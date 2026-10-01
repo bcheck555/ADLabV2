@@ -91,7 +91,7 @@
                language="neutral" versionScope="nonSxS"
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <AutoLogon>
-        <Password><Value>P@ssw0rd!Lab1</Value><PlainText>true</PlainText></Password>
+        <Password><Value>${password}</Value><PlainText>true</PlainText></Password>
         <Enabled>true</Enabled>
         <Username>Administrator</Username>
       </AutoLogon>
@@ -135,10 +135,11 @@
       </OOBE>
       <UserAccounts>
         <AdministratorPassword>
-          <Value>P@ssw0rd!Lab1</Value>
+          <Value>${password}</Value>
           <PlainText>true</PlainText>
         </AdministratorPassword>
       </UserAccounts>
     </component>
   </settings>
 </unattend>
+

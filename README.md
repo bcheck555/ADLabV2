@@ -134,18 +134,19 @@ subsequent runs reuse it without requiring the parameter.
 
 #### OpenTofu variables
 
-Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and fill in:
+Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` for the non-secret host settings. Supply the shared password through the current PowerShell process environment:
 
-```hcl
-host_user     = "Administrator"
-host_password = "REPLACE_WITH_ROTATED_PASSWORD"
+```powershell
+$secureLabPassword = Read-Host "Shared lab password" -AsSecureString
+$env:AD_LAB_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new('', $secureLabPassword).Password
+Remove-Variable secureLabPassword
 ```
 
 The checked-in example matches the host built by `ad-hyperv-lab`: the repository is
 `D:\Git\ADLabV2`, VM disks and base images live below
 `E:\Hyper-V\Virtual Hard Disks\ADLabV2`, and the shared switch is `LabNAT`.
-Never reuse or commit an existing host password; rotate it on the Hyper-V host, then
-put only the rotated value in the ignored `terraform.tfvars`.
+Set the rotated password on the Hyper-V host and lab accounts. `Build-Lab.ps1` forwards it to OpenTofu as `TF_VAR_host_password`, and the Packer wrappers forward it as `PKR_VAR_ssh_pass`. Ansible reads `AD_LAB_ADMIN_PASSWORD` inside its container. Direct OpenTofu and Packer runs require their corresponding `TF_VAR_host_password` or `PKR_VAR_ssh_pass` environment variable.
+After the build session, clear the shared variable with `Remove-Item Env:AD_LAB_ADMIN_PASSWORD -ErrorAction SilentlyContinue`.
 
 ---
 
@@ -156,16 +157,13 @@ Each image only needs to be built once. Packer outputs its `.vhdx` to
 
 ```powershell
 # Ubuntu 24.04 (GIT01) — build first
-packer init packer\ubuntu2404\
-packer build packer\ubuntu2404\
+.\Build-Ubuntu.ps1
 
 # Windows Server 2025 (all Windows servers)
-packer init packer\ws2025\
-packer build packer\ws2025\
+.\Build-WS2025.ps1
 
 # Windows 11 (workstations)
-packer init packer\win11\
-packer build packer\win11\
+.\Build-Win11.ps1
 ```
 
 Convenience wrapper scripts are also available at the repo root:
@@ -246,9 +244,10 @@ Add these CI/CD variables in GitLab (**Settings → CI/CD → Variables**):
 
 | Variable | Type | Value |
 |----------|------|-------|
-| `LAB_HOST_PASSWORD` | Masked | Hyper-V host Administrator password |
-| `LAB_PASSWORD` | Masked | Lab VM local/domain admin password |
+| `AD_LAB_ADMIN_PASSWORD` | Masked, protected | Shared Hyper-V host and lab account password |
 | `SSH_PRIVATE_KEY` | Masked file | Contents of `/home/labadmin/.ssh/id_ed25519` on GIT01 |
+
+Packer and OpenTofu jobs map this variable to their native environment names. Ansible reads it directly; no password is added to its command line.
 
 ```bash
 # On GIT01 — copy the private key value for the CI variable:
@@ -380,12 +379,9 @@ sudo gitlab-ctl start
 
 ### Security
 
-- **`ansible-vault` encryption not done** — `group_vars/all.yml` and `config/lab.config.psd1` contain plaintext passwords committed to git. Comments mark affected values with `# VAULT THIS`.
-- **Move `lab.config.psd1` credentials** to a gitignored sidecar file (same pattern as `terraform.tfvars`).
-- **Remove cleartext `chpasswd`** from `packer/ubuntu2404/http/user-data` — use the hashed form instead.
+- Lab passwords are supplied through `AD_LAB_ADMIN_PASSWORD` at runtime. Rotate the shared password on the host and lab accounts after removing older copies from the current files.
 - **Clean up WinRM remnants** in `packer/ws2025/scripts/03-sysprep.ps1` before generalize — Basic auth + unencrypted transport persist into every VM image built from it.
 - **Populate `known_hosts`** after initial bootstrap and remove `StrictHostKeyChecking=no` from `group_vars/windows.yml` and `group_vars/hyperv.yml`.
-- **Remove default plaintext `ssh_pass`** from Packer variable blocks; require `-var` or a gitignored `.auto.pkrvars.hcl`.
 
 ### Reliability / Correctness
 
@@ -399,7 +395,7 @@ sudo gitlab-ctl start
 
 ### PowerShell / Tooling
 
-- **`Destroy-Lab.ps1`** does not pass `-var=host_password` to `tofu destroy` — will prompt or fail if `terraform.tfvars` is absent. Prefer the `terraform:destroy` CI job which injects `LAB_HOST_PASSWORD`.
+- **Destroy-Lab.ps1** removes VMs directly; use the `terraform:destroy` CI job for provider-managed cleanup.
 - **`Setup-Packer.ps1`** step 3/3 label says "Checking OpenTofu" but should say "Checking Packer" — and never actually validates the Packer binary is present.
 - **`Check-Prerequisites.ps1`** uses `head -1` (Unix) which breaks in native PowerShell.
 - **`Build-WS2025.ps1`** adds the Packer exe directory to `$PATH` but then calls bare `packer`, not the configured path.

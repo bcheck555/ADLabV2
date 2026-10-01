@@ -8,11 +8,9 @@
 #                  network access to all lab VMs via host networking
 #
 # CI/CD variables (Settings → CI/CD → Variables):
-#   - LAB_HOST_PASSWORD   (masked)       — Hyper-V host admin password
-#   - LAB_PASSWORD        (masked)       — Lab VM local/domain admin password
+#   - AD_LAB_ADMIN_PASSWORD (masked, protected) — shared lab and host password
 #   - SSH_PRIVATE_KEY     (masked, file) — labadmin private key from GIT01
 #                                          (/home/labadmin/.ssh/id_ed25519)
-#   - ANSIBLE_VAULT_PASS  (masked, file) — Vault password (if using vault)
 #
 # Bootstrap note: This pipeline runs AFTER GitLab is up and the git01 runner
 # is registered. Initial GIT01 setup is done manually via Build-Lab.ps1.
@@ -28,6 +26,9 @@ packer:ws2025:
   stage: packer
   when: manual
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - packer init packer/ws2025/
     - packer build packer/ws2025/
@@ -40,6 +41,9 @@ packer:win11:
   stage: packer
   when: manual
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - packer init packer/win11/
     - packer build packer/win11/
@@ -52,6 +56,9 @@ packer:ubuntu2404:
   stage: packer
   when: manual
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - packer init packer/ubuntu2404/
     - packer build packer/ubuntu2404/
@@ -65,10 +72,13 @@ packer:ubuntu2404:
 terraform:plan:
   stage: terraform
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - cd terraform
     - tofu init -input=false
-    - tofu plan -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -out=tfplan
+    - tofu plan -input=false -out=tfplan
   artifacts:
     paths:
       - terraform/tfplan
@@ -82,10 +92,13 @@ terraform:apply:
   stage: terraform
   when: manual
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - cd terraform
     - tofu init -input=false
-    - tofu apply -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -auto-approve
+    - tofu apply -input=false -auto-approve
   dependencies:
     - terraform:plan
   rules:
@@ -95,10 +108,13 @@ terraform:destroy:
   stage: terraform
   when: manual
   tags: [hyperv-host]
+  before_script:
+    - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
+    - $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD
   script:
     - cd terraform
     - tofu init -input=false
-    - tofu destroy -input=false -var="host_password=$env:LAB_HOST_PASSWORD" -auto-approve
+    - tofu destroy -input=false -auto-approve
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
@@ -109,7 +125,7 @@ terraform:destroy:
 #
 # The runner config on GIT01 (/etc/gitlab-runner/config.toml) must set:
 #   [runners.docker]
-#     network_mode = "host"   # gives the container direct LabSwitch access
+#     network_mode = "host"   # gives the container direct LabNAT access
 #     volumes = ["/cache"]
 
 .ansible_defaults: &ansible_defaults
@@ -121,13 +137,14 @@ terraform:destroy:
     ANSIBLE_STDOUT_CALLBACK: yaml
     GIT_STRATEGY: clone
   before_script:
+    - test -n "$AD_LAB_ADMIN_PASSWORD" || { echo "Set the protected AD_LAB_ADMIN_PASSWORD CI variable." >&2; exit 1; }
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
 
 ansible:deploy:
   <<: *ansible_defaults
   script:
-    - ansible-playbook ansible/site.yml -e "lab_password=$LAB_PASSWORD"
+    - ansible-playbook ansible/site.yml
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
@@ -137,7 +154,7 @@ ansible:deploy:
 ansible:deploy-workstations:
   <<: *ansible_defaults
   script:
-    - ansible-playbook ansible/site.yml --tags workstations -e "lab_password=$LAB_PASSWORD"
+    - ansible-playbook ansible/site.yml --tags workstations
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
@@ -147,7 +164,6 @@ ansible:deploy-limit:
   <<: *ansible_defaults
   script:
     - ansible-playbook ansible/site.yml --limit "$ANSIBLE_LIMIT" --tags "$ANSIBLE_TAGS"
-        -e "lab_password=$LAB_PASSWORD"
   variables:
     ANSIBLE_LIMIT: all
     ANSIBLE_TAGS: ""
@@ -157,6 +173,6 @@ ansible:deploy-limit:
 ansible:ping:
   <<: *ansible_defaults
   script:
-    - ansible -i ansible/inventory/hosts.yml all -m ping -e "lab_password=$LAB_PASSWORD"
+    - ansible -i ansible/inventory/hosts.yml all -m ping
   rules:
     - when: manual
