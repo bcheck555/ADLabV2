@@ -154,7 +154,7 @@ function Receive-BitsFile {
 
     $lastProgress = -1
     while ($true) {
-        $job = Get-BitsTransfer -Id $job.Id
+        $job = Get-BitsTransfer -JobId $job.JobId
         switch ($job.JobState) {
             'Transferred' {
                 Complete-BitsTransfer -BitsJob $job
