@@ -16,9 +16,20 @@
 # is registered. Initial GIT01 setup is done manually via Build-Lab.ps1.
 
 stages:
+  - security
   - packer
   - terraform
   - ansible
+
+# Scan the checked-out working tree only. Historical commits are intentionally
+# excluded; local pre-commit scanning checks staged changes before commit.
+security:secrets:
+  stage: security
+  tags: [git01]
+  image: golang:1.24
+  script:
+    - go install github.com/zricethezav/gitleaks/v8@v8.24.2
+    - "$(go env GOPATH)/bin/gitleaks" dir --redact .
 
 # ── Packer stages (manual — long-running, triggered explicitly) ───────────────
 

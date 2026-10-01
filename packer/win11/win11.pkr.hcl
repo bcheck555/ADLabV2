@@ -122,6 +122,7 @@ build {
 
   provisioner "powershell" {
     script = "${path.root}/scripts/03-sysprep.ps1"
+    environment_vars = ["LAB_ADMIN_PASSWORD=${var.ssh_pass}"]
   }
 
   post-processor "shell-local" {

@@ -10,6 +10,8 @@ terraform/crash.log
 # === Packer ===
 packer/*/output/
 packer_cache/
+**/unattend.xml
+**/Autounattend.xml
 
 # === Ansible ===
 ansible/.vault_pass               # Vault password file — NEVER commit

@@ -13,7 +13,12 @@ Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\M
 
 # Write sysprep unattend so deployed VMs auto-complete OOBE with known credentials
 $unattendPath = 'C:\Windows\System32\Sysprep\unattend.xml'
-Set-Content $unattendPath -Encoding UTF8 -Value @'
+$labAdminPassword = $env:LAB_ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($labAdminPassword)) {
+    throw 'LAB_ADMIN_PASSWORD was not provided by the Packer provisioner.'
+}
+$xmlPassword = [System.Security.SecurityElement]::Escape($labAdminPassword)
+$unattendXml = @'
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
   <settings pass="specialize">
@@ -39,7 +44,7 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <UserAccounts>
         <AdministratorPassword>
-          <Value>P@ssw0rd!Lab1</Value>
+          <Value>__LAB_ADMIN_PASSWORD__</Value>
           <PlainText>true</PlainText>
         </AdministratorPassword>
       </UserAccounts>
@@ -56,6 +61,8 @@ Set-Content $unattendPath -Encoding UTF8 -Value @'
   </settings>
 </unattend>
 '@
+$unattendXml = $unattendXml.Replace('__LAB_ADMIN_PASSWORD__', $xmlPassword)
+Set-Content -LiteralPath $unattendPath -Encoding UTF8 -Value $unattendXml
 
 Write-Host 'Scheduling sysprep in 90 seconds...'
 $action    = New-ScheduledTaskAction -Execute 'C:\Windows\System32\Sysprep\sysprep.exe' `

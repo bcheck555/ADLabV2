@@ -240,6 +240,19 @@ gitlab-runner register `
   --registration-token <token-from-gitlab-ui>
 ```
 
+Install the local secret check from the repository root on each developer machine:
+
+```powershell
+py -m pip install pre-commit
+pre-commit install
+```
+
+The Gitleaks pre-commit hook scans staged changes and blocks commits containing
+detected secrets. GitLab CI also scans the checked-out files on every pipeline;
+it does not scan old Git history. For a finding, remove the literal and source
+the value from an environment or CI secret variable instead. Do not add real
+credentials to the Gitleaks allowlist.
+
 Add these CI/CD variables in GitLab (**Settings → CI/CD → Variables**):
 
 | Variable | Type | Value |
