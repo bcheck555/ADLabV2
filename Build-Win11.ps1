@@ -19,9 +19,11 @@ if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) {
 if (-not $PackerDir) { $PackerDir = Join-Path $cfg.PackerDir 'win11' }
 $OutputDir = Join-Path $PackerDir 'output'
 
-# Add packer tools to PATH for oscdimg
+# Keep packer.exe available and add the ADK ISO tool for this build process.
 $packerToolDir = Split-Path -Parent $cfg.PackerExe
 $env:PATH = "$packerToolDir;$env:PATH"
+. (Join-Path $LabRoot 'Packer-HostTools.ps1')
+Initialize-PackerIsoToolPath | Out-Null
 
 Write-Host "=== Build-Win11: Starting Packer build ===" -ForegroundColor Cyan
 Write-Host "This will take 30-60 minutes" -ForegroundColor Yellow

@@ -40,6 +40,7 @@ packer:ws2025:
   before_script:
     - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
     - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
+    - . "$env:CI_PROJECT_DIR\Packer-HostTools.ps1"; Initialize-PackerIsoToolPath | Out-Null
   script:
     - packer init packer/ws2025/
     - packer build packer/ws2025/
@@ -55,6 +56,7 @@ packer:win11:
   before_script:
     - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
     - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
+    - . "$env:CI_PROJECT_DIR\Packer-HostTools.ps1"; Initialize-PackerIsoToolPath | Out-Null
   script:
     - packer init packer/win11/
     - packer build packer/win11/
@@ -70,6 +72,7 @@ packer:ubuntu2404:
   before_script:
     - if ([string]::IsNullOrWhiteSpace($env:AD_LAB_ADMIN_PASSWORD)) { throw 'Set the protected AD_LAB_ADMIN_PASSWORD CI variable.' }
     - $env:PKR_VAR_ssh_pass = $env:AD_LAB_ADMIN_PASSWORD
+    - . "$env:CI_PROJECT_DIR\Packer-HostTools.ps1"; Initialize-PackerIsoToolPath | Out-Null
   script:
     - packer init packer/ubuntu2404/
     - packer build packer/ubuntu2404/

@@ -155,6 +155,19 @@ After the build session, clear the shared variable with `Remove-Item Env:AD_LAB_
 Each image only needs to be built once. Packer outputs its `.vhdx` to
 `E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images`.
 
+After `Populate-LabSources.ps1` has staged the ADK offline layout, run the Packer
+setup script once from an elevated PowerShell on the Hyper-V host:
+
+```powershell
+.\Setup-Packer.ps1
+```
+
+This creates the Packer switch, checks the installer ISOs, and installs the ADK
+Deployment Tools component when `oscdimg.exe` is missing. The image build wrappers
+and Hyper-V CI jobs add the installed `oscdimg` directory to their process `PATH`;
+they stop with setup instructions if the command cannot be found. No machine-wide
+`PATH` change is made.
+
 ```powershell
 # Ubuntu 24.04 (GIT01) — build first
 .\Build-Ubuntu.ps1
@@ -409,7 +422,7 @@ sudo gitlab-ctl start
 ### PowerShell / Tooling
 
 - **Destroy-Lab.ps1** removes VMs directly; use the `terraform:destroy` CI job for provider-managed cleanup.
-- **`Setup-Packer.ps1`** step 3/3 label says "Checking OpenTofu" but should say "Checking Packer" — and never actually validates the Packer binary is present.
+- **`Setup-Packer.ps1`** does not verify that the configured Packer executable exists.
 - **`Build-WS2025.ps1`** adds the Packer exe directory to `$PATH` but then calls bare `packer`, not the configured path.
 
 ### Housekeeping

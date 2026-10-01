@@ -5,6 +5,8 @@ $ErrorActionPreference = 'Continue'
 $LabRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $cfg = Import-PowerShellDataFile (Join-Path $LabRoot 'config\lab.config.psd1')
 
+. (Join-Path $LabRoot 'Packer-HostTools.ps1')
+
 Write-Host "`n=== ADLabV2 Prerequisites Check ===" -ForegroundColor Cyan
 
 # 1. Hyper-V
@@ -73,8 +75,19 @@ if ($docker) {
     Write-Host "       → Install Docker Desktop" -ForegroundColor Yellow
 }
 
-# 5. Base VHDs
-Write-Host "[5/5] Base VHDs..." -NoNewline
+# 5. Packer ISO creation tool
+Write-Host "[5/6] Packer ISO tool (oscdimg)..." -NoNewline
+$oscdimgPath = Get-PackerIsoToolPath
+if ($oscdimgPath) {
+    Initialize-PackerIsoToolPath | Out-Null
+    Write-Host " OK ($oscdimgPath)" -ForegroundColor Green
+} else {
+    Write-Host " MISSING" -ForegroundColor Red
+    Write-Host "       → Run .\Setup-Packer.ps1 from elevated PowerShell after populating LabSources." -ForegroundColor Yellow
+}
+
+# 6. Base VHDs
+Write-Host "[6/6] Base VHDs..." -NoNewline
 $cfg = Import-PowerShellDataFile "$LabRoot\config\lab.config.psd1"
 $vhdMissing = @()
 foreach ($vhd in @($cfg.WS2025BaseVHD, $cfg.Win11BaseVHD, $cfg.Ubuntu2404BaseVHD)) {
