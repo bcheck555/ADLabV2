@@ -39,7 +39,7 @@ All VMs **and the Hyper-V host itself** use **OpenSSH** for Ansible connectivity
 
 Ansible runs inside a Docker container **on GIT01**, not on the Hyper-V host. This means:
 
-- No Docker Desktop routing workarounds — GIT01 is on LabSwitch and reaches all lab VMs directly.
+- No Docker Desktop routing workarounds — GIT01 is on LabNAT and reaches all lab VMs directly.
 - GitLab Runner uses the **Docker executor** — CI jobs run in isolated containers.
 - `network_mode: host` in `docker/docker-compose.yml` works correctly on Linux.
 - Host Docker Desktop is only needed for the initial GIT01 bootstrap.
@@ -63,7 +63,8 @@ Ansible runs inside a Docker container **on GIT01**, not on the Hyper-V host. Th
 
 ```powershell
 # Create the internal switch used by all lab VMs
-New-VMSwitch -Name LabSwitch -SwitchType Internal
+# LabNAT is created and configured by the ad-hyperv-lab Ansible playbook.
+Get-VMSwitch -Name LabNAT
 
 # Optional: NAT for lab internet access
 New-NetNat -Name LabNAT -InternalIPInterfaceAddressPrefix 192.168.100.0/24
@@ -137,14 +138,21 @@ Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and fi
 
 ```hcl
 host_user     = "Administrator"
-host_password = "your-host-password"
+host_password = "REPLACE_WITH_ROTATED_PASSWORD"
 ```
+
+The checked-in example matches the host built by `ad-hyperv-lab`: the repository is
+`D:\Git\ADLabV2`, VM disks and base images live below
+`E:\Hyper-V\Virtual Hard Disks\ADLabV2`, and the shared switch is `LabNAT`.
+Never reuse or commit an existing host password; rotate it on the Hyper-V host, then
+put only the rotated value in the ignored `terraform.tfvars`.
 
 ---
 
 ### 2. Build Packer Images
 
-Each image only needs to be built once. Packer outputs a `.vhdx` to `base-vhds\`.
+Each image only needs to be built once. Packer outputs its `.vhdx` to
+`E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images`.
 
 ```powershell
 # Ubuntu 24.04 (GIT01) — build first
@@ -334,7 +342,7 @@ DC=lab,DC=local
 ## Destroy
 
 ```powershell
-# Tears down all VMs and deletes their VHDXs. Base images in base-vhds\ are preserved.
+# Tears down all VMs and deletes their VHDXs. Base images in E:\Hyper-V are preserved.
 .\Destroy-Lab.ps1
 
 # Or via CI (manual trigger):
@@ -398,7 +406,7 @@ sudo gitlab-ctl start
 
 ### Housekeeping
 
-- Add `terraform/terraform.tfvars.example` with placeholder values so new cloners know what is required.
+- Keep `terraform/terraform.tfvars.example` current when host paths or switch names change.
 - Remove stale `terraform/.terraform.tfstate.lock.info` from the working tree.
 - Remove `debug.PNG` from `packer/ubuntu2404/`.
 - Fix stale comment in `terraform/vms.tf` (`state = Running` comment says "Create VMs stopped").

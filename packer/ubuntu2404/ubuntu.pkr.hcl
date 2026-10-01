@@ -19,7 +19,7 @@ variable "iso_path" {
 }
 
 variable "iso_checksum" {
-  type    = string
+  type = string
   # SHA256 of ubuntu-24.04.4-live-server-amd64.iso
   # Verify at: https://releases.ubuntu.com/24.04/SHA256SUMS
   default = "sha256:e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433"
@@ -32,7 +32,7 @@ variable "output_dir" {
 
 variable "disk_size" {
   type    = number
-  default = 40960  # 40 GB in MB
+  default = 40960 # 40 GB in MB
 }
 
 variable "memory" {
@@ -62,18 +62,18 @@ variable "ssh_pass" {
 }
 
 source "hyperv-iso" "ubuntu2404" {
-  vm_name              = var.vm_name
-  iso_url              = var.iso_path
-  iso_checksum         = var.iso_checksum
-  output_directory     = var.output_dir
-  disk_size            = var.disk_size
-  memory               = var.memory
-  cpus                 = var.cpu_count
-  generation           = 2
-  enable_secure_boot   = false
+  vm_name               = var.vm_name
+  iso_url               = var.iso_path
+  iso_checksum          = var.iso_checksum
+  output_directory      = var.output_dir
+  disk_size             = var.disk_size
+  memory                = var.memory
+  cpus                  = var.cpu_count
+  generation            = 2
+  enable_secure_boot    = false
   enable_dynamic_memory = false
-  switch_name          = var.switch_name
-  guest_additions_mode = "disable"
+  switch_name           = var.switch_name
+  guest_additions_mode  = "disable"
 
   # Ubuntu autoinstall cloud-init user-data delivered via cidata CD (no HTTP needed)
   cd_label = "cidata"
@@ -87,15 +87,15 @@ source "hyperv-iso" "ubuntu2404" {
     "initrd /casper/initrd<enter><wait>",
     "boot<enter><wait>"
   ]
-  boot_wait         = "10s"
+  boot_wait              = "10s"
   boot_keygroup_interval = "500ms"
 
-  communicator    = "ssh"
-  ssh_host        = "10.0.0.2"
-  ssh_port        = 22
-  ssh_username    = var.ssh_user
-  ssh_password    = var.ssh_pass
-  ssh_timeout     = "30m"
+  communicator           = "ssh"
+  ssh_host               = "10.0.0.2"
+  ssh_port               = 22
+  ssh_username           = var.ssh_user
+  ssh_password           = var.ssh_pass
+  ssh_timeout            = "30m"
   ssh_handshake_attempts = 500
   # Subiquity runs its own sshd during install with a different password; wait past install
   # before attempting to connect, so we don't burn handshake attempts auth-failing the installer.
@@ -119,7 +119,7 @@ build {
 
   post-processor "shell-local" {
     inline = [
-      "powershell -Command \"$src = Get-ChildItem '${var.output_dir}' -Filter '*.vhdx' -Recurse | Select-Object -First 1; if ($src) { $dest = 'D:\\CODE\\ADLabV2\\base-vhds\\ubuntu2404-base.vhdx'; New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null; Move-Item $src.FullName $dest -Force; Write-Host ('Moved ' + $src.Name + ' to ubuntu2404-base.vhdx'); Remove-Item '${var.output_dir}' -Recurse -Force -ErrorAction SilentlyContinue } else { Write-Error 'No VHDX found in output directory' }\""
+      "powershell -Command \"$src = Get-ChildItem '${var.output_dir}' -Filter '*.vhdx' -Recurse | Select-Object -First 1; if ($src) { $dest = 'E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images\\ubuntu2404-base.vhdx'; New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null; Move-Item $src.FullName $dest -Force; Write-Host ('Moved ' + $src.Name + ' to ubuntu2404-base.vhdx'); Remove-Item '${var.output_dir}' -Recurse -Force -ErrorAction SilentlyContinue } else { Write-Error 'No VHDX found in output directory' }\""
     ]
   }
 }

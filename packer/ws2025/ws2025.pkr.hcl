@@ -112,7 +112,7 @@ build {
     script = "${path.root}/scripts/04-move-vhdx.sh"
     environment_vars = [
       "PACKER_OUTPUT_DIR=${var.output_dir}",
-      "PACKER_DEST_PATH=D:\\CODE\\ADLabV2\\base-vhds\\ws2025-base.vhdx"
+      "PACKER_DEST_PATH=E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images\\ws2025-base.vhdx"
     ]
   }
 }

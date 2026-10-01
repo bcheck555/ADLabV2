@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and replace the password placeholder.
+# terraform.tfvars is ignored by Git and must never be committed.
+
+host_user     = "Administrator"
+host_password = "REPLACE_WITH_ROTATED_PASSWORD"
+
+# Defaults match the host layout created by ad-hyperv-lab.
+vm_dir       = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2"
+base_vhd_dir = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images"
+switch_name  = "LabNAT"
+
+ws2025_base_vhdx     = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images\\ws2025-base.vhdx"
+win11_base_vhdx      = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images\\win11-base.vhdx"
+ubuntu2404_base_vhdx = "E:\\Hyper-V\\Virtual Hard Disks\\ADLabV2\\Base Images\\ubuntu2404-base.vhdx"

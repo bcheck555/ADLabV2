@@ -8,7 +8,7 @@
 #
 # Prerequisites:
 #   - Packer base images already built (run packer build manually for each image type)
-#   - LabSwitch Hyper-V switch exists (run New-VMSwitch -Name LabSwitch -SwitchType Internal first)
+#   - LabNAT Hyper-V switch exists (created by the ad-hyperv-lab Ansible playbook)
 #   - tofu.exe in PATH
 #   - Docker Desktop running (bootstrap only - GIT01 takes over after first run)
 #   - terraform/terraform.tfvars populated with host_password
@@ -68,7 +68,7 @@ if (-not $SkipTofu) {
 if (-not $SkipNetworkBootstrap) {
     Write-Step 'Bootstrapping VM network (PowerShell Direct)'
 
-    # Set host vNIC for LabSwitch to gateway IP
+    # Set host vNIC for the configured lab switch to gateway IP
     $hostAdapter = Get-NetAdapter | Where-Object { $_.Name -eq "vEthernet ($($cfg.SwitchName))" }
     if ($hostAdapter) {
         $existing = Get-NetIPAddress -InterfaceIndex $hostAdapter.InterfaceIndex `

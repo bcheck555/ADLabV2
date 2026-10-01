@@ -1,11 +1,11 @@
 #!/bin/bash
-# Post-processor: move VHDX from build output to base-vhds
+# Post-processor: move VHDX from build output to Hyper-V storage
 # Called by Packer — receives paths via environment variables
 
 set -e
 
-OUTPUT_DIR="${PACKER_OUTPUT_DIR:-D:/CODE/ADLabV2/packer/ws2025/output}"
-DEST_PATH="${PACKER_DEST_PATH:-D:/CODE/ADLabV2/base-vhds/ws2025-base.vhdx}"
+OUTPUT_DIR="${PACKER_OUTPUT_DIR:-D:/Git/ADLabV2/packer/ws2025/output}"
+DEST_PATH="${PACKER_DEST_PATH:-E:/Hyper-V/Virtual Hard Disks/ADLabV2/Base Images/ws2025-base.vhdx}"
 
 # Normalize paths for PowerShell (convert backslashes to forward slashes)
 OUTPUT_DIR=$(echo "$OUTPUT_DIR" | sed 's|\\|/|g')

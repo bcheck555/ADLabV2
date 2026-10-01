@@ -3,6 +3,7 @@
 
 $ErrorActionPreference = 'Continue'
 $LabRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$cfg = Import-PowerShellDataFile (Join-Path $LabRoot 'config\lab.config.psd1')
 
 Write-Host "`n=== ADLabV2 Prerequisites Check ===" -ForegroundColor Cyan
 
@@ -15,14 +16,14 @@ if ($hvFeature.State -eq 'Enabled') {
     Write-Host " MISSING (State: $($hvFeature.State))" -ForegroundColor Red
 }
 
-# 2. LabSwitch
-Write-Host "[2/5] LabSwitch..." -NoNewline
-$switch = Get-VMSwitch -Name LabSwitch -ErrorAction SilentlyContinue
+# 2. Lab switch
+Write-Host "[2/5] $($cfg.SwitchName) switch..." -NoNewline
+$switch = Get-VMSwitch -Name $cfg.SwitchName -ErrorAction SilentlyContinue
 if ($switch) {
     Write-Host " OK ($($switch.SwitchType))" -ForegroundColor Green
 } else {
     Write-Host " MISSING" -ForegroundColor Red
-    Write-Host "       → Run: New-VMSwitch -Name LabSwitch -SwitchType Internal" -ForegroundColor Yellow
+    Write-Host "       → Run the ad-hyperv-lab Ansible playbook to create $($cfg.SwitchName) and its NAT." -ForegroundColor Yellow
 }
 
 # 3. OpenTofu

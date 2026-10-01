@@ -5,7 +5,7 @@
     DomainDN          = 'DC=lab,DC=local'
 
     # === Network ===
-    SwitchName        = 'LabSwitch'
+    SwitchName        = 'LabNAT'
     NetworkPrefix     = '192.168.100'
     SubnetMask        = '255.255.255.0'
     PrefixLength      = 24
@@ -20,10 +20,10 @@
     PackerBuildPfx    = 24
 
     # === Paths ===
-    LabRoot           = 'D:\CODE\ADLabV2'
-    BaseVhdDir        = 'D:\CODE\ADLabV2\base-vhds'
-    VMDir             = 'D:\CODE\ADLabV2\vms'
-    PackerDir         = 'D:\CODE\ADLabV2\packer'
+    LabRoot           = 'D:\Git\ADLabV2'
+    BaseVhdDir        = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images'
+    VMDir             = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2'
+    PackerDir         = 'D:\Git\ADLabV2\packer'
     PackerExe         = 'D:\Tools\packer\packer.exe'
     TofuExe           = 'D:\Tools\tofu\tofu.exe'     # or 'tofu' if in PATH
 
@@ -33,9 +33,9 @@
     Ubuntu2404ISO     = 'D:\LabSources\ISOs\ubuntu-24.04.4-live-server-amd64.iso'
 
     # === Base VHDs (Packer output) ===
-    WS2025BaseVHD     = 'D:\CODE\ADLabV2\base-vhds\ws2025-base.vhdx'
-    Win11BaseVHD      = 'D:\CODE\ADLabV2\base-vhds\win11-base.vhdx'
-    Ubuntu2404BaseVHD = 'D:\CODE\ADLabV2\base-vhds\ubuntu2404-base.vhdx'
+    WS2025BaseVHD     = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images\ws2025-base.vhdx'
+    Win11BaseVHD      = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images\win11-base.vhdx'
+    Ubuntu2404BaseVHD = 'E:\Hyper-V\Virtual Hard Disks\ADLabV2\Base Images\ubuntu2404-base.vhdx'
 
     # === Credentials (lab use only — not production) ===
     LocalAdminUser    = 'Administrator'
