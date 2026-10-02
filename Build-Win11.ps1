@@ -107,16 +107,35 @@ while (-not $packer.HasExited) {
     }
 }
 
+# Ensure the process has fully exited before reading its final exit code.
+$packer.WaitForExit()
+$packer.Refresh()
+$packerExitCode = $packer.ExitCode
+
 # Flush remaining output
 $content = Get-Content $packerLog -ErrorAction SilentlyContinue
 if ($content -and $content.Count -gt $lastPos) {
     $content[$lastPos..($content.Count - 1)] | ForEach-Object { Write-Host "  [packer] $_" }
 }
 
-if ($packer.ExitCode -ne 0) {
+if ($null -eq $packerExitCode) {
+    $packerLogText = Get-Content $packerLog -Raw -ErrorAction SilentlyContinue
+    $buildReportedSuccess = $packerLogText -match 'Builds finished\.'
+    $artifactMoved = $packerLogText -match 'Moved .* to win11-base\.vhdx'
+    $artifactExists = Test-Path -LiteralPath $cfg.Win11BaseVHD -PathType Leaf
+
+    if ($buildReportedSuccess -and $artifactMoved -and $artifactExists) {
+        Write-Warning "Packer provided no process exit code; build success verified from its log and base VHDX."
+        $packerExitCode = 0
+    } else {
+        throw "Packer exited without an exit code, and build success could not be verified. See $packerLog"
+    }
+}
+
+if ($packerExitCode -ne 0) {
     $errContent = Get-Content "$packerLog.err" -ErrorAction SilentlyContinue
     if ($errContent) { $errContent | ForEach-Object { Write-Warning $_ } }
-    throw "Packer Win11 build failed with exit code $($packer.ExitCode). See $packerLog"
+    throw "Packer Win11 build failed with exit code $packerExitCode. See $packerLog"
 }
 
 Write-Host "=== Build-Win11: Complete ===" -ForegroundColor Green

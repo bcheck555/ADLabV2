@@ -169,7 +169,14 @@ jobs verify the switch address and add the installed `oscdimg` directory to thei
 process `PATH`; they stop with setup instructions if either prerequisite is
 missing. No machine-wide `PATH` change is made.
 
+Packer's temporary Hyper-V VMs and VHDXs use the process `TEMP` directory. Set
+it to a volume with sufficient free space before starting image builds:
+
 ```powershell
+New-Item -ItemType Directory -Force E:\PackerTemp | Out-Null
+$env:TEMP = 'E:\PackerTemp'
+$env:TMP  = 'E:\PackerTemp'
+
 # Ubuntu 24.04 (GIT01) — build first
 .\Build-Ubuntu.ps1
 
@@ -179,6 +186,13 @@ missing. No machine-wide `PATH` change is made.
 # Windows 11 (workstations)
 .\Build-Win11.ps1
 ```
+
+If Hyper-V pauses the VM with `Disk(s) encountered critical IO errors`, check
+the host volume that contains the attached VHDX and its free space. A full
+volume can trigger this error. For example, Packer may place the temporary
+VHDX under `C:\Users\<user>\AppData\Local\Temp`; redirect `TEMP` and `TMP` to
+a volume with sufficient free space before starting the build. Changing these
+variables does not relocate a disk used by a build already in progress.
 
 Convenience wrapper scripts are also available at the repo root:
 `Build-Ubuntu.ps1`, `Build-WS2025.ps1`, `Build-Win11.ps1`
