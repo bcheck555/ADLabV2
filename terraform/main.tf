@@ -19,6 +19,6 @@ provider "hyperv" {
   password = var.host_password
   https    = false
   insecure = true
-  use_ntlm = false
+  use_ntlm = true
   timeout  = "30s"
 }
