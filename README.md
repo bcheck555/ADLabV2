@@ -201,7 +201,18 @@ Convenience wrapper scripts are also available at the repo root:
 
 ### 3. Bootstrap: Manual First Run
 
+Run `Setup-Tofu.ps1` once from an elevated Windows PowerShell on the Hyper-V
+host before creating VMs. It creates a WinRM HTTPS listener bound to
+`127.0.0.1:5986`, or reuses an existing valid HTTPS listener on that endpoint.
+The Hyper-V provider uses NTLM over HTTPS; its Go WinRM client requires HTTPS
+when WinRM's `AllowUnencrypted` setting is false. The setup uses a self-signed
+certificate, which the loopback provider accepts with `insecure = true`.
+`Build-Lab.ps1` checks the port and runs `tofu init` before `tofu apply`.
+
 ```powershell
+# Configure WinRM HTTPS for the local Hyper-V provider
+.\Setup-Tofu.ps1
+
 # Phase 1 — Create all VMs (Ansible skipped, network bootstrapped via PowerShell Direct)
 .\Build-Lab.ps1 -SkipAnsible
 

@@ -56,6 +56,9 @@ if (-not $switch) {
 # ---OpenTofu -----------------------------------------------------------------
 if (-not $SkipTofu) {
     Write-Step 'Running OpenTofu (creating VMs)'
+    if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 5986 -InformationLevel Quiet -WarningAction SilentlyContinue)) {
+        throw 'WinRM HTTPS is unavailable on 127.0.0.1:5986. Run .\Setup-Tofu.ps1 from an elevated PowerShell, then retry.'
+    }
     Push-Location "$LabRoot\terraform"
     $previousTfPassword = [Environment]::GetEnvironmentVariable('TF_VAR_host_password', 'Process')
     $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD

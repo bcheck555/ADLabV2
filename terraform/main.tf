@@ -14,10 +14,11 @@ terraform {
 # DISA GPOs applied to the lab VMs.
 provider "hyperv" {
   host     = "127.0.0.1"
-  port     = 5985
+  port     = 5986
   user     = var.host_user
   password = var.host_password
-  https    = false
+  https    = true
+  # Setup-Tofu.ps1 uses a self-signed certificate on the loopback listener.
   insecure = true
   use_ntlm = true
   timeout  = "30s"
