@@ -9,7 +9,7 @@ Write-Host "`n=== Packer Setup ===" -ForegroundColor Cyan
 . (Join-Path $LabRoot 'Packer-HostTools.ps1')
 
 # 1. Create PackerSwitch
-Write-Host "`n[1/3] Checking $($cfg.PackerSwitch)..." -NoNewline
+Write-Host "`n[1/4] Checking $($cfg.PackerSwitch)..." -NoNewline
 $switch = Get-VMSwitch -Name $cfg.PackerSwitch -ErrorAction SilentlyContinue
 if ($switch) {
     Write-Host " OK" -ForegroundColor Green
@@ -19,8 +19,13 @@ if ($switch) {
     Write-Host " Created" -ForegroundColor Green
 }
 
-# 2. Check ISOs
-Write-Host "[2/3] Checking ISOs..." -ForegroundColor Cyan
+# 2. Configure the host vNIC on the isolated Packer network.
+Write-Host "[2/4] Configuring Packer host adapter..." -NoNewline
+$packerNetwork = Set-PackerHostNetwork -SwitchName $cfg.PackerSwitch -IPAddress $cfg.PackerBuildGw -PrefixLength $cfg.PackerBuildPfx
+Write-Host " OK ($($packerNetwork.AdapterName): $($packerNetwork.IPAddress)/$($packerNetwork.PrefixLength))" -ForegroundColor Green
+
+# 3. Check ISOs
+Write-Host "[3/4] Checking ISOs..." -ForegroundColor Cyan
 $isoCfg = @{
     'WS2025' = $cfg.WS2025ISO
     'Win11'  = $cfg.Win11ISO
@@ -42,8 +47,8 @@ if (-not $allExists) {
     exit 1
 }
 
-# 3. Install ADK Deployment Tools when oscdimg is not already available.
-Write-Host "[3/3] Checking Packer ISO tool (oscdimg)..." -NoNewline
+# 4. Install ADK Deployment Tools when oscdimg is not already available.
+Write-Host "[4/4] Checking Packer ISO tool (oscdimg)..." -NoNewline
 $oscdimgPath = Get-PackerIsoToolPath
 if (-not $oscdimgPath) {
     $adkSetupPath = 'D:\LabSources\SoftwarePackages\ADK\adksetup.exe'

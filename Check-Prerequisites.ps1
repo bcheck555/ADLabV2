@@ -75,8 +75,18 @@ if ($docker) {
     Write-Host "       → Install Docker Desktop" -ForegroundColor Yellow
 }
 
-# 5. Packer ISO creation tool
-Write-Host "[5/6] Packer ISO tool (oscdimg)..." -NoNewline
+# 5. Packer host adapter
+Write-Host "[5/7] Packer host adapter..." -NoNewline
+$packerNetwork = Get-PackerHostNetworkStatus -SwitchName $cfg.PackerSwitch -IPAddress $cfg.PackerBuildGw -PrefixLength $cfg.PackerBuildPfx
+if ($packerNetwork) {
+    Write-Host " OK ($($packerNetwork.IPAddress)/$($packerNetwork.PrefixLength))" -ForegroundColor Green
+} else {
+    Write-Host " MISSING OR MISCONFIGURED" -ForegroundColor Red
+    Write-Host "       → Run .\Setup-Packer.ps1 from elevated PowerShell to configure the host vNIC." -ForegroundColor Yellow
+}
+
+# 6. Packer ISO creation tool
+Write-Host "[6/7] Packer ISO tool (oscdimg)..." -NoNewline
 $oscdimgPath = Get-PackerIsoToolPath
 if ($oscdimgPath) {
     Initialize-PackerIsoToolPath | Out-Null
@@ -86,8 +96,8 @@ if ($oscdimgPath) {
     Write-Host "       → Run .\Setup-Packer.ps1 from elevated PowerShell after populating LabSources." -ForegroundColor Yellow
 }
 
-# 6. Base VHDs
-Write-Host "[6/6] Base VHDs..." -NoNewline
+# 7. Base VHDs
+Write-Host "[7/7] Base VHDs..." -NoNewline
 $cfg = Import-PowerShellDataFile "$LabRoot\config\lab.config.psd1"
 $vhdMissing = @()
 foreach ($vhd in @($cfg.WS2025BaseVHD, $cfg.Win11BaseVHD, $cfg.Ubuntu2404BaseVHD)) {

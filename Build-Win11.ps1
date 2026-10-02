@@ -24,6 +24,7 @@ $packerToolDir = Split-Path -Parent $cfg.PackerExe
 $env:PATH = "$packerToolDir;$env:PATH"
 . (Join-Path $LabRoot 'Packer-HostTools.ps1')
 Initialize-PackerIsoToolPath | Out-Null
+Assert-PackerHostNetwork -SwitchName $cfg.PackerSwitch -IPAddress $cfg.PackerBuildGw -PrefixLength $cfg.PackerBuildPfx | Out-Null
 
 Write-Host "=== Build-Win11: Starting Packer build ===" -ForegroundColor Cyan
 Write-Host "This will take 30-60 minutes" -ForegroundColor Yellow

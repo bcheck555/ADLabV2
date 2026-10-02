@@ -24,6 +24,7 @@ try {
     $env:PATH = "$packerToolDir;$env:PATH"
     . (Join-Path $LabRoot 'Packer-HostTools.ps1')
     Initialize-PackerIsoToolPath | Out-Null
+    Assert-PackerHostNetwork -SwitchName $cfg.PackerSwitch -IPAddress $cfg.PackerBuildGw -PrefixLength $cfg.PackerBuildPfx | Out-Null
 
     & packer init .
     if ($LASTEXITCODE -ne 0) { throw "packer init failed" }

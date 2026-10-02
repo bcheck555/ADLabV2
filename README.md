@@ -162,11 +162,12 @@ setup script once from an elevated PowerShell on the Hyper-V host:
 .\Setup-Packer.ps1
 ```
 
-This creates the Packer switch, checks the installer ISOs, and installs the ADK
-Deployment Tools component when `oscdimg.exe` is missing. The image build wrappers
-and Hyper-V CI jobs add the installed `oscdimg` directory to their process `PATH`;
-they stop with setup instructions if the command cannot be found. No machine-wide
-`PATH` change is made.
+This creates the Packer switch, assigns the host adapter `10.0.0.1/24` used by
+the builders, checks the installer ISOs, and installs the ADK Deployment Tools
+component when `oscdimg.exe` is missing. The image build wrappers and Hyper-V CI
+jobs verify the switch address and add the installed `oscdimg` directory to their
+process `PATH`; they stop with setup instructions if either prerequisite is
+missing. No machine-wide `PATH` change is made.
 
 ```powershell
 # Ubuntu 24.04 (GIT01) — build first
