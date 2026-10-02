@@ -60,6 +60,9 @@ if (-not $SkipTofu) {
     $previousTfPassword = [Environment]::GetEnvironmentVariable('TF_VAR_host_password', 'Process')
     $env:TF_VAR_host_password = $env:AD_LAB_ADMIN_PASSWORD
     try {
+        & tofu init -input=false
+        if ($LASTEXITCODE -ne 0) { throw "tofu init failed" }
+
         & tofu apply -input=false -auto-approve -parallelism=5
         if ($LASTEXITCODE -ne 0) { throw "tofu apply failed" }
     } finally {
