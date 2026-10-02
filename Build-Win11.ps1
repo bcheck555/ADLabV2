@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 # Build-Win11.ps1
 # Runs the Win11 Packer build and enables vTPM on the Packer VM the moment
-# it appears — before Windows Setup performs its TPM compatibility check.
+# it appears, before Windows Setup performs its TPM compatibility check.
 # Packer's hyperv-iso builder has no native vTPM option, so we race it here.
 
 param(
@@ -92,7 +92,7 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (-not $vtpmEnabled -and -not $packer.HasExited) {
-    Write-Warning "  vTPM not enabled within 5 minutes — TPM check may fail."
+    Write-Warning "  vTPM not enabled within 5 minutes - TPM check may fail."
 }
 
 # Stream Packer output to console while waiting
