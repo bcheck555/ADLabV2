@@ -1,5 +1,5 @@
 ---
-# group_vars/all.yml — Variables shared across all hosts
+# group_vars/all.yml - Variables shared across all hosts
 # The password is supplied at runtime via AD_LAB_ADMIN_PASSWORD.
 
 # === Domain ===
@@ -22,7 +22,7 @@ lab_password: "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"
 sql_sa_password: "{{ lookup('ansible.builtin.env', 'AD_LAB_ADMIN_PASSWORD') }}"
 
 # === Hyper-V host ===
-lab_hvhost_ip:  192.168.1.50   # Management IP of the Hyper-V host — update if different
+    lab_hvhost_ip:  192.168.1.50   # Management IP of the Hyper-V host - update if different
 
 # === SCVMM ===
 # Leave blank if using an evaluation/volume-licensed build that requires no key.

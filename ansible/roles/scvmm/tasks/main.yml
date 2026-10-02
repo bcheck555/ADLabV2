@@ -1,7 +1,7 @@
 ---
 # scvmm/tasks/main.yml
 # Joins domain and installs SCVMM 2025 on VMM01.
-# SCVMM requires SQL Server — DB01 must be configured first.
+# SCVMM requires SQL Server - DB01 must be configured first.
 # VMM01 needs nested virtualization enabled (set in terraform/vms.tf).
 #
 # Software source: D:\LabSources\SoftwarePackages on hvhost.
@@ -29,7 +29,7 @@
           cmd /c "net use S: \\{{ lab_gateway }}\LabSources /user:Administrator {{ lab_password }} /persistent:no" | Out-Null
         }
         if (-not (Test-Path 'S:\ADK\adksetup.exe')) {
-          throw "adksetup.exe not found at S:\ADK\ — populate D:\LabSources\SoftwarePackages\ADK on hvhost."
+    throw "adksetup.exe not found at S:\ADK\ - populate D:\LabSources\SoftwarePackages\ADK on hvhost."
         }
         Write-Host "Copying ADK layout to $adkDest..."
         Copy-Item -Path 'S:\ADK\*' -Destination $adkDest -Recurse -Force
@@ -42,7 +42,7 @@
           cmd /c "net use S: \\{{ lab_gateway }}\LabSources /user:Administrator {{ lab_password }} /persistent:no" | Out-Null
         }
         if (-not (Test-Path 'S:\ADKWinPE\adkwinpesetup.exe')) {
-          throw "adkwinpesetup.exe not found at S:\ADKWinPE\ — populate D:\LabSources\SoftwarePackages\ADKWinPE on hvhost."
+    throw "adkwinpesetup.exe not found at S:\ADKWinPE\ - populate D:\LabSources\SoftwarePackages\ADKWinPE on hvhost."
         }
         Write-Host "Copying ADK WinPE layout to $adkPeDest..."
         Copy-Item -Path 'S:\ADKWinPE\*' -Destination $adkPeDest -Recurse -Force
@@ -63,8 +63,8 @@
       }
       $adkExe = 'C:\ADKSetup\adksetup.exe'
       $peExe  = 'C:\ADKWinPESetup\adkwinpesetup.exe'
-      if (-not (Test-Path $adkExe)) { throw "Local ADK layout missing at $adkExe — run staging task first." }
-      if (-not (Test-Path $peExe))  { throw "Local ADK WinPE layout missing at $peExe — run staging task first." }
+    if (-not (Test-Path $adkExe)) { throw "Local ADK layout missing at $adkExe - run staging task first." }
+    if (-not (Test-Path $peExe))  { throw "Local ADK WinPE layout missing at $peExe - run staging task first." }
 
       Write-Host "Installing ADK core from $adkExe..."
       $r = Start-Process $adkExe -ArgumentList '/quiet /norestart /features OptionId.DeploymentTools' -Wait -PassThru
@@ -158,7 +158,7 @@
 
       if (-not (Test-Path "$dest\setup.exe")) {
         if (-not (Test-Path 'S:\SCVMM2025\setup.exe')) {
-          throw "setup.exe not found at S:\SCVMM2025\ — populate D:\LabSources\SoftwarePackages\SCVMM2025 on hvhost."
+    throw "setup.exe not found at S:\SCVMM2025\ - populate D:\LabSources\SoftwarePackages\SCVMM2025 on hvhost."
         }
         Write-Host "Copying SCVMM installer to $dest..."
         Copy-Item -Path 'S:\SCVMM2025\*' -Destination $dest -Recurse -Force
@@ -230,7 +230,7 @@
         @{ Name = 'SQL Command Line Utilities (sqlcmd)';   Path = 'C:\SCVMMSetup\MsSqlCmdLnUtils.msi';                                   Args = '/quiet /norestart IACCEPTMSSQLCMDLNUTILSLICENSETERMS=YES'; Msi = $true }
       )
       foreach ($p in $prereqs) {
-        if (-not (Test-Path $p.Path)) { Write-Warning "Skipping $($p.Name) — not found at $($p.Path)"; continue }
+    if (-not (Test-Path $p.Path)) { Write-Warning "Skipping $($p.Name) - not found at $($p.Path)"; continue }
         Write-Host "Installing $($p.Name)..."
         if ($p.Msi) {
           $r = Start-Process msiexec.exe -ArgumentList "/i `"$($p.Path)`" $($p.Args)" -Wait -PassThru
@@ -290,7 +290,7 @@
 #   1. Embedding the script in a PS single-quoted here-string (@' '@) and writing
 #      it with Set-Content caused backslash doubling (C:\path) in the output file.
 #      SCVMM's /f INI parser does not resolve double backslashes, so it silently
-#      skipped the INI — leaving SqlInstanceName, SqlDBAdminName, etc. all blank.
+#      skipped the INI - leaving SqlInstanceName, SqlDBAdminName, etc. all blank.
 #   2. The argument array was named $args, which is a PowerShell reserved automatic
 #      variable (holds unbound positional params).  Under a scheduled-task/SYSTEM
 #      context the variable collided and CLI flags were dropped, also leaving all
@@ -331,7 +331,7 @@
   ansible.windows.win_powershell:
     script: |
       if (Get-Service SCVMMService -ErrorAction SilentlyContinue) {
-        Write-Host "SCVMM already installed — skipping."
+    Write-Host "SCVMM already installed - skipping."
         $Ansible.Changed = $false
         return
       }
@@ -388,7 +388,7 @@
 
       # If SCVMM is already installed (re-run), bail out immediately
       if (Get-Service SCVMMService -ErrorAction SilentlyContinue) {
-        Write-Host "SCVMM service present — already installed."
+    Write-Host "SCVMM service present - already installed."
         $Ansible.Changed = $false
         return
       }
@@ -411,7 +411,7 @@
           if ($code -notin @(0, 3010)) {
             $log = if (Test-Path 'C:\ProgramData\VMMLogs\SetupWizard.log') {
               Get-Content 'C:\ProgramData\VMMLogs\SetupWizard.log' -Tail 80 | Out-String
-            } else { '(no log found — install may have been blocked before setup initialised)' }
+    } else { '(no log found - install may have been blocked before setup initialised)' }
             throw "SCVMM install failed (exit $code).`n$log"
           }
           Write-Host "SCVMM install succeeded."
@@ -420,7 +420,7 @@
         }
 
         if ($taskState -eq 'Ready' -and -not $running) {
-          # Task finished but wrote no exit file — something killed it very early
+    # Task finished but wrote no exit file - something killed it very early
           throw "SCVMM scheduled task ended without writing an exit code. Check C:\ProgramData\VMMLogs\ and the Windows Event Log."
         }
 
@@ -428,6 +428,6 @@
           throw "SCVMM install timed out after $maxMinutes minutes."
         }
       }
-  async: 5700   # 95 min — slightly over the 90 min poll window
+  async: 5700   # 95 min - slightly over the 90 min poll window
   poll: 60
   ignore_errors: false

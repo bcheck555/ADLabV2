@@ -1,5 +1,5 @@
 ---
-# group_vars/hyperv.yml — Connection settings for the Hyper-V host
+# group_vars/hyperv.yml - Connection settings for the Hyper-V host
 # Used by tasks delegated to hvhost (e.g. attaching ISOs via Set-VMDvdDrive)
 
 ansible_connection:        winrm

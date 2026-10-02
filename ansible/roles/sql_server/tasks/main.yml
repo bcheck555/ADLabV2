@@ -9,7 +9,7 @@
     target_ou: 'OU=Servers,OU=Computers,OU=NETS,{{ lab_domain_dn }}'
 
 - name: Verify hvhost is reachable before delegating
-  # ansible.builtin.ping bootstraps a Python script — it doesn't work on
+# ansible.builtin.ping bootstraps a Python script - it doesn't work on
   # Windows SSH+PowerShell connections and will hang looking for Python.
   # ansible.builtin.raw sends a bare SSH command with no module overhead.
   ansible.builtin.raw: echo ok
@@ -19,7 +19,7 @@
 
 - name: Attach SQL ISO via Hyper-V DVD drive
   # hvhost uses ansible_connection=ssh + ansible_shell_type=powershell.
-  # win_powershell requires WinRM — use ansible.builtin.shell here instead.
+# win_powershell requires WinRM - use ansible.builtin.shell here instead.
   # async+poll keeps Ansible printing a heartbeat line so the run doesn't look hung.
   ansible.windows.win_shell: |
     $isoPath = '{{ sql_iso_host_path }}'
@@ -29,10 +29,10 @@
     }
     $dvd = Get-VMDvdDrive -VMName {{ inventory_hostname }} -ErrorAction SilentlyContinue
     if ($dvd) {
-      Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive exists — updating path to $isoPath"
+    Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive exists - updating path to $isoPath"
       Set-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
     } else {
-      Write-Host "[$(Get-Date -f 'HH:mm:ss')] No DVD drive found — adding one with $isoPath"
+    Write-Host "[$(Get-Date -f 'HH:mm:ss')] No DVD drive found - adding one with $isoPath"
       Add-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
     }
     Write-Host "[$(Get-Date -f 'HH:mm:ss')] ISO attached successfully."
@@ -102,7 +102,7 @@
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] Starting SQL Server setup on $env:COMPUTERNAME"
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] This typically takes 20-40 minutes. Ansible polls every 30 s."
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] ============================================================"
-      Write-Host "Starting SQL Server setup — this takes 20-40 minutes…"
+Write-Host "Starting SQL Server setup - this takes 20-40 minutes..."
       $result = Start-Process -FilePath "${drive}\setup.exe" `
         -ArgumentList $setupArgs -Wait -PassThru -WorkingDirectory "${drive}\"
       Write-Host "SQL Server setup exited with code $($result.ExitCode)"
@@ -119,11 +119,11 @@
   register: sql_install
   ignore_errors: true
   async: 3600   # allow up to 60 min; poll keeps Ansible from timing out the connection
-  poll: 30      # check every 30 s — shows a heartbeat line so it doesn't look hung
+  poll: 30      # check every 30 s - shows a heartbeat line so it doesn't look hung
 
 - name: Detach SQL ISO from Hyper-V DVD drive
   # hvhost uses ansible_connection=ssh + ansible_shell_type=powershell.
-  # win_powershell requires WinRM — use ansible.windows.win_shell here instead.
+# win_powershell requires WinRM - use ansible.windows.win_shell here instead.
   ansible.windows.win_shell: |
     $dvd = Get-VMDvdDrive -VMName {{ inventory_hostname }} -ErrorAction SilentlyContinue
     if ($dvd) {

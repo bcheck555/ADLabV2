@@ -1,6 +1,6 @@
 #!/bin/bash
 # Post-processor: move VHDX from build output to Hyper-V storage
-# Called by Packer — receives paths via environment variables
+# Called by Packer - receives paths via environment variables
 
 set -e
 

@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-# Destroy-Lab.ps1 — Tears down all ADLabV2 VMs via OpenTofu.
+# Destroy-Lab.ps1 - Tears down all ADLabV2 VMs via OpenTofu.
 # VHDXs and Packer base images are NOT deleted.
 
 [CmdletBinding(SupportsShouldProcess)]

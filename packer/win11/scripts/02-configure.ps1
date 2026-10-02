@@ -48,14 +48,14 @@ if ($ps7Msi -and (Test-Path $ps7Msi)) {
 Start-Service sshd -ErrorAction SilentlyContinue
 Set-Service sshd -StartupType Automatic
 
-# Build sshd_config — use PS7 subsystem if available, otherwise PS5.1
+# Build sshd_config - use PS7 subsystem if available, otherwise PS5.1
 $subsystem = if (Test-Path 'C:\Program Files\PowerShell\7\pwsh.exe') {
     'Subsystem powershell "c:/program files/powershell/7/pwsh.exe" -sshs -nologo'
 } else {
     'Subsystem powershell c:/windows/system32/windowspowershell/v1.0/powershell.exe -sshs -nologo'
 }
 $sshdConfig = @"
-# ADLabV2 sshd_config — managed by Packer
+# ADLabV2 sshd_config - managed by Packer
 Port 22
 PasswordAuthentication yes
 PubkeyAuthentication yes

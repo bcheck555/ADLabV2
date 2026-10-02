@@ -1,7 +1,7 @@
-# vms.tf — All lab VMs defined as OpenTofu resources.
+# vms.tf - All lab VMs defined as OpenTofu resources.
 #
 # Each VM gets an independent dynamic VHDX copied from the appropriate base image.
-# Static IPs are NOT set here — Ansible sets them on first run.
+# Static IPs are NOT set here - Ansible sets them on first run.
 # This keeps OpenTofu focused on VM lifecycle, Ansible on configuration.
 #
 # Note: tofu destroy does NOT delete the VHDX files (null_resource has no destroy
@@ -28,7 +28,7 @@ locals {
   }
 }
 
-# Independent dynamic VHDXs — one per VM, copied from the appropriate base image.
+# Independent dynamic VHDXs - one per VM, copied from the appropriate base image.
 # Copies can be created in parallel (no shared parent lock).
 resource "null_resource" "vm_disk" {
   for_each = local.vms
@@ -64,7 +64,7 @@ resource "hyperv_machine_instance" "vm" {
   static_memory        = true
   memory_startup_bytes = each.value.ram_gb * 1024 * 1024 * 1024
 
-  # Gen 2 security settings — disable Secure Boot for lab use
+# Gen 2 security settings - disable Secure Boot for lab use
   vm_firmware {
     enable_secure_boot              = "Off"
     preferred_network_boot_protocol = "IPv4"

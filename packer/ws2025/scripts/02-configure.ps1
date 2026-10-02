@@ -59,13 +59,13 @@ Set-Service sshd -StartupType Automatic
 
 # sshd_config: password auth for initial bootstrap, PS7 subsystem for Ansible
 $sshdConfig = @'
-# ADLabV2 sshd_config — managed by Packer
+# ADLabV2 sshd_config - managed by Packer
 Port 22
 PasswordAuthentication yes
 PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
 
-# PowerShell 7 subsystem — required for ansible_shell_type=powershell over SSH
+# PowerShell 7 subsystem - required for ansible_shell_type=powershell over SSH
 Subsystem powershell c:/progra~1/powershell/7/pwsh.exe -sshs -nologo
 '@
 Set-Content 'C:\ProgramData\ssh\sshd_config' $sshdConfig -Force -Encoding UTF8

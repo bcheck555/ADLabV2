@@ -1,7 +1,7 @@
 #!/bin/bash
 # Packer provisioner: 01-init.sh (Ubuntu 24.04)
 # Waits for cloud-init to finish and verifies base state.
-# NOTE: offline build — no apt operations.
+# NOTE: offline build - no apt operations.
 set -euo pipefail
 
 echo '=== 01-init: Starting ==='

@@ -2,7 +2,7 @@
 # common_windows/tasks/main.yml
 # Minimal post-boot configuration for all Windows VMs.
 # Most baseline config was applied by Packer. This role handles
-# static IP assignment and hostname — things that must happen per-instance.
+# static IP assignment and hostname - things that must happen per-instance.
 
 - name: Set static IP address
   ansible.windows.win_powershell:

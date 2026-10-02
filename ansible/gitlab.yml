@@ -1,5 +1,5 @@
 ---
-# gitlab.yml — Standalone playbook to configure GIT01 only.
+# gitlab.yml - Standalone playbook to configure GIT01 only.
 # Use this during bootstrap before the full site.yml run.
 #
 # Usage:

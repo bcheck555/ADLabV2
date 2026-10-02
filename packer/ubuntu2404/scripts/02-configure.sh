@@ -1,12 +1,12 @@
 #!/bin/bash
 # Packer provisioner: 02-configure.sh (Ubuntu 24.04)
 # Baseline hardening and final image prep.
-# NOTE: offline build — no apt operations. python3 / openssh-server ship on the live-server ISO.
+# NOTE: offline build - no apt operations. python3 / openssh-server ship on the live-server ISO.
 set -euo pipefail
 
 echo '=== 02-configure: Starting ==='
 
-# Harden SSH — align with what Ansible will expect
+# Harden SSH - align with what Ansible will expect
 sudo tee /etc/ssh/sshd_config.d/99-lab.conf > /dev/null <<'EOF'
 PasswordAuthentication yes
 PubkeyAuthentication yes

@@ -1,7 +1,7 @@
 ---
-# group_vars/workstations.yml — Connection overrides for Win11 workstations.
+# group_vars/workstations.yml - Connection overrides for Win11 workstations.
 #
-# The Win11 Packer image uses the built-in Administrator account — set via
+# The Win11 Packer image uses the built-in Administrator account - set via
 # AdministratorPassword in autounattend.xml (oobeSystem pass), which also
 # enables the account. This override keeps workstations consistent with
 # all other Windows VMs.

@@ -4,12 +4,12 @@
 #   - hyperv-host  Shell executor (PowerShell) on the Hyper-V host
 #                  Required for Packer (Hyper-V API) and OpenTofu
 #   - git01        Docker executor on GIT01 (192.168.100.5)
-#                  Used for Ansible — runs adlabv2-ansible image, full
+#                  Used for Ansible - runs adlabv2-ansible image, full
 #                  network access to all lab VMs via host networking
 #
 # CI/CD variables (Settings → CI/CD → Variables):
-#   - AD_LAB_ADMIN_PASSWORD (masked, protected) — shared lab and host password
-#   - SSH_PRIVATE_KEY     (masked, file) — labadmin private key from GIT01
+#   - AD_LAB_ADMIN_PASSWORD (masked, protected) - shared lab and host password
+#   - SSH_PRIVATE_KEY     (masked, file) - labadmin private key from GIT01
 #                                          (/home/labadmin/.ssh/id_ed25519)
 #
 # Bootstrap note: This pipeline runs AFTER GitLab is up and the git01 runner
@@ -31,7 +31,7 @@ security:secrets:
     - go install github.com/zricethezav/gitleaks/v8@v8.24.2
     - "$(go env GOPATH)/bin/gitleaks" dir --redact .
 
-# ── Packer stages (manual — long-running, triggered explicitly) ───────────────
+# -- Packer stages (manual - long-running, triggered explicitly) --------------
 
 packer:ws2025:
   stage: packer
@@ -163,7 +163,7 @@ ansible:deploy:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
 
-# Workstation-only run — checks VM power state on hvhost first, then
+# Workstation-only run - checks VM power state on hvhost first, then
 # configures WKS01/WKS02. Safe to re-run; handles licensing rearm reboots.
 ansible:deploy-workstations:
   <<: *ansible_defaults

@@ -1,5 +1,5 @@
 ---
-# group_vars/linux.yml — Ansible connection settings for Linux hosts (GIT01)
+# group_vars/linux.yml - Ansible connection settings for Linux hosts (GIT01)
 
 ansible_connection: ssh
 ansible_user:       labadmin

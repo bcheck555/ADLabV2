@@ -33,7 +33,7 @@ function Write-Step([string]$msg) {
     Write-Host "`n=== $msg ===" -ForegroundColor Cyan
 }
 
-# ---Verify prerequisites ──────────────────────────────────────────────────────
+# ---Verify prerequisites ------------------------------------------------------
 Write-Step 'Checking prerequisites'
 
 $cfg = Import-PowerShellDataFile "$LabRoot\config\lab.config.psd1"
@@ -53,7 +53,7 @@ if (-not $switch) {
     throw "Hyper-V switch '$($cfg.SwitchName)' not found. Run: New-VMSwitch -Name '$($cfg.SwitchName)' -SwitchType Internal"
 }
 
-# ---OpenTofu ──────────────────────────────────────────────────────────────────
+# ---OpenTofu -----------------------------------------------------------------
 if (-not $SkipTofu) {
     Write-Step 'Running OpenTofu (creating VMs)'
     Push-Location "$LabRoot\terraform"
@@ -74,7 +74,7 @@ if (-not $SkipTofu) {
     Write-Host 'Skipping OpenTofu (--SkipTofu).'
 }
 
-# ---Network bootstrap (PowerShell Direct) ─────────────────────────────────────
+# ---Network bootstrap (PowerShell Direct) ------------------------------------
 if (-not $SkipNetworkBootstrap) {
     Write-Step 'Bootstrapping VM network (PowerShell Direct)'
 
@@ -154,7 +154,7 @@ if (-not $SkipNetworkBootstrap) {
     Write-Host 'Skipping network bootstrap (--SkipNetworkBootstrap).'
 }
 
-# ---Ansible (Docker) ──────────────────────────────────────────────────────────
+# ---Ansible (Docker) ----------------------------------------------------------
 if (-not $SkipAnsible) {
     Write-Step 'Building Ansible Docker image'
     Push-Location "$LabRoot\docker"
@@ -182,9 +182,9 @@ if (-not $SkipAnsible) {
             Write-Warning "Ansible finished with unreachable hosts (exit 4). See PLAY RECAP above for per-host status."
         } elseif ($LASTEXITCODE -eq 2) {
             # ansible-core returns 2 when hosts are rescued via meta:end_host
-            # in a rescue block — the internal failure state isn't fully cleared
+            # in a rescue block - the internal failure state isn't fully cleared
             # even though PLAY RECAP shows failed=0. Treat as a warning.
-            Write-Warning "Ansible exited with code 2 (rescued/skipped hosts). Check PLAY RECAP — if failed=0 for all hosts, this is safe to ignore."
+            Write-Warning "Ansible exited with code 2 (rescued/skipped hosts). Check PLAY RECAP - if failed=0 for all hosts, this is safe to ignore."
         } elseif ($LASTEXITCODE -ne 0) {
             throw "Ansible playbook failed with exit code $LASTEXITCODE"
         }
@@ -206,7 +206,7 @@ if ($GitLabOnly) {
     Write-Host '       ssh labadmin@192.168.100.5'
     Write-Host '       sudo gitlab-runner register --url http://192.168.100.5 --executor docker --docker-image alpine --tag-list git01'
     Write-Host '  4. Build the Ansible image on GIT01:'
-    Write-Host '       ssh labadmin@192.168.100.5 "cd ADLabV2; docker compose -f docker/docker-compose.yml build"'
+    Write-Host '       ssh labadmin@192.168.100.5 ''cd ADLabV2; docker compose -f docker/docker-compose.yml build'''
     Write-Host '  5. Add SSH_PRIVATE_KEY CI variable in GitLab (contents of /home/labadmin/.ssh/id_ed25519 on GIT01)'
     Write-Host '  6. Future full-lab runs: trigger the ansible:deploy pipeline in GitLab CI'
 } else {

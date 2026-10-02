@@ -1,5 +1,5 @@
 ---
-# ADLabV2 Master Playbook — domain infrastructure only (git01 excluded).
+# ADLabV2 Master Playbook - domain infrastructure only (git01 excluded).
 # GIT01 is bootstrapped separately via gitlab.yml (Build-Lab.ps1 -GitLabOnly).
 # After GIT01 is up, site.yml runs from GIT01 via GitLab CI.
 #
@@ -29,7 +29,7 @@
     - domain_controller
   tags: [dc01, ad, dns]
 
-# ── 2-5. Domain member servers (parallel — all depend only on DC01 being up) ──
+# -- 2-5. Domain member servers (parallel - all depend only on DC01 being up) --
 - name: Configure domain member servers (DC02, CA01, DB01, WEB01)
   hosts: dc02:ca01:db01:web01
   gather_facts: false
@@ -78,7 +78,7 @@
           if ($vm.State -eq 'Running') {
             Write-Host "OK: $vmName is already Running"
           } else {
-            Write-Host "START: $vmName is '$($vm.State)' — starting now..."
+    Write-Host "START: $vmName is '$($vm.State)' - starting now..."
             Start-VM -Name $vmName
             $started += $vmName
             Write-Host "STARTED: $vmName"
@@ -120,7 +120,7 @@
     - workstation
   tags: [workstations, wks]
 
-# ── 8. SCVMM (last — depends on domain + SQL) ────────────────────────────────
+# -- 8. SCVMM (last - depends on domain + SQL) --------------------------------
 - name: Configure VMM01 (SCVMM 2025)
   hosts: vmm01
   gather_facts: false
