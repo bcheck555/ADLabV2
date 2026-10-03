@@ -10,7 +10,20 @@
     group: root
     mode: '0600'
   notify: apply netplan
-  ignore_errors: true
+
+- name: Disable cloud-init network regeneration once Ansible owns the configuration
+  ansible.builtin.copy:
+    content: "network: {config: disabled}\n"
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Remove initial cloud-init Netplan file to avoid duplicate routes
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  notify: apply netplan
 
 - name: Set hostname
   ansible.builtin.hostname:

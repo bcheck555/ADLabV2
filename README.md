@@ -213,15 +213,116 @@ certificate, which the loopback provider accepts with `insecure = true`.
 # Configure WinRM HTTPS for the local Hyper-V provider
 .\Setup-Tofu.ps1
 
-# Phase 1 — Create all VMs (Ansible skipped, network bootstrapped via PowerShell Direct)
+# Phase 1 - Create all VMs and bootstrap Windows networking via PowerShell Direct
+# GIT01 gets its network automatically from a cloud-init seed ISO.
 .\Build-Lab.ps1 -SkipAnsible
+```
 
-# Phase 2 — Bootstrap GIT01: installs Docker CE, GitLab CE, GitLab Runner,
+#### Automatic GIT01 network setup
+
+For a **new GIT01 disk created from the updated Ubuntu base image**, OpenTofu
+calls `New-Git01Seed.ps1` and attaches a cloud-init NoCloud ISO before first boot.
+Ubuntu reads GIT01's IP (`192.168.100.5`), prefix, gateway, and DNS from
+`config/lab.config.psd1`; the ISO contains no passwords. It uses `oscdimg.exe`
+from the Windows ADK installed by `Setup-Packer.ps1`. Cloud-init applies the
+address automatically, and Ansible takes over the persistent Netplan settings.
+Allow the first boot to finish, then check SSH before Phase 2 below.
+
+**Upgrading from an older Ubuntu base:** rebuild it with `.\Build-Ubuntu.ps1`
+using the updated image preparation script. Existing GIT01 disks keep their
+current configuration; attaching the ISO alone does not reset them. Use the
+manual fallback below for an existing disk, or recreate GIT01 with a fresh copy
+of the rebuilt base if its data is disposable. Recreating its disk erases its
+GitLab data. Network changes should also match the Ansible inventory and group
+variables. GitLab installation needs working DNS and internet access via LabNAT.
+
+#### Manual fallback for older Ubuntu images
+
+PowerShell Direct only bootstraps Windows guests. An older GIT01 disk can retain
+Packer's `10.0.0.2/24` address. If SSH is not reachable at `192.168.100.5`, open
+the console and configure it manually:
+
+```powershell
+vmconnect.exe localhost GIT01
+```
+
+Log into GIT01's console as `labadmin`, using the password supplied to Packer
+through `AD_LAB_ADMIN_PASSWORD`. Run `ip -br link` to identify the Ethernet
+interface. The example below uses `eth0`, as does
+`ansible/roles/common_linux/templates/99-lab-static.yaml.j2`; update both if your
+interface has a different name. Adjust the addresses if you changed the lab
+network. The DNS values match that template, including its public DNS fallback;
+GitLab installation requires working DNS and internet access through LabNAT.
+
+The basic Ubuntu VMConnect console does not support clipboard paste. To avoid
+typing the full Netplan configuration there, type only these commands in the
+console (replace `eth0` if needed):
+
+```bash
+ip -br link
+sudo ip addr add 192.168.100.5/24 dev eth0
+```
+
+This temporary address lets the Hyper-V host reach GIT01 over SSH. It disappears
+after reboot. From PowerShell on the host, connect using the same `labadmin`
+password:
+
+```powershell
+ssh labadmin@192.168.100.5
+```
+
+Paste the following commands into the SSH session to make the network settings
+persistent. If `netplan apply` disconnects SSH, reconnect using the command above.
+
+```bash
+
+# Back up existing Netplan files before removing Packer's network configuration.
+backup_dir="/etc/netplan-backup-$(date +%Y%m%d-%H%M%S)"
+sudo cp -a /etc/netplan "$backup_dir"
+sudo rm -f /etc/netplan/*.yaml /etc/netplan/*.yml
+
+# Keep cloud-init from restoring the image's network configuration on reboot.
+echo 'network: {config: disabled}' | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg >/dev/null
+
+# Use the same file that Ansible will manage after SSH becomes reachable.
+sudo tee /etc/netplan/99-lab-static.yaml >/dev/null <<'EOF'
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: false
+      addresses:
+        - 192.168.100.5/24
+      routes:
+        - to: default
+          via: 192.168.100.1
+      nameservers:
+        addresses:
+          - 192.168.100.10
+          - 192.168.100.11
+          - 8.8.8.8
+EOF
+sudo chmod 600 /etc/netplan/99-lab-static.yaml
+sudo netplan generate
+sudo netplan apply
+ip -br address
+ip route
+```
+
+#### Continue with GitLab configuration
+
+On the Hyper-V host, verify SSH is reachable before starting Phase 2. Continue
+when `TcpTestSucceeded` is `True` (for either automatic setup or the fallback):
+
+```powershell
+Test-NetConnection -ComputerName 192.168.100.5 -Port 22
+
+# Phase 2 - Bootstrap GIT01: installs Docker CE, GitLab CE, GitLab Runner,
 #            and distributes GIT01's SSH public key to all other lab VMs.
-#            Uses Docker Desktop on the host — last time it's needed.
+#            Uses Docker Desktop on the host - last time it's needed.
 .\Build-Lab.ps1 -SkipTofu -GitLabOnly
 
-# Phase 3 — Configure domain infrastructure from the host as a one-off,
+# Phase 3 - Configure domain infrastructure from the host as a one-off,
 #            or skip this and let GitLab CI handle it after Phase 5.
 .\Build-Lab.ps1 -SkipTofu
 ```

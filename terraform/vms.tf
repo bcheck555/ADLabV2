@@ -1,29 +1,36 @@
 # vms.tf - All lab VMs defined as OpenTofu resources.
 #
 # Each VM gets an independent dynamic VHDX copied from the appropriate base image.
-# Static IPs are NOT set here - Ansible sets them on first run.
-# This keeps OpenTofu focused on VM lifecycle, Ansible on configuration.
+# GIT01 receives its initial network settings from a cloud-init seed ISO.
+# Build-Lab bootstraps Windows networking; Ansible manages ongoing configuration.
 #
 # Note: tofu destroy does NOT delete the VHDX files (null_resource has no destroy
 # provisioner). Run Destroy-Lab.ps1 for full cleanup including disk files.
 
 locals {
+  # A new filename avoids overwriting media already attached to a running VM.
+  git01_seed_version = substr(sha256(join(":", [
+    filesha256("${path.module}/../config/lab.config.psd1"),
+    filesha256("${path.module}/../New-Git01Seed.ps1"),
+  ])), 0, 12)
+  git01_seed_path = "${var.vm_dir}\\GIT01\\seed-${local.git01_seed_version}.iso"
+
   # Map base type to base VHDX path
   base_vhds = {
-    ws2025    = var.ws2025_base_vhdx
-    win11     = var.win11_base_vhdx
-    ubuntu    = var.ubuntu2404_base_vhdx
+    ws2025 = var.ws2025_base_vhdx
+    win11  = var.win11_base_vhdx
+    ubuntu = var.ubuntu2404_base_vhdx
   }
 
   vms = {
-    git01 = { cpu = 4, ram_gb = 8,  base = "ubuntu", disk_gb = 40 }
-    dc01  = { cpu = 4, ram_gb = 8,  base = "ws2025", disk_gb = 60 }
-    dc02  = { cpu = 4, ram_gb = 8,  base = "ws2025", disk_gb = 60 }
-    ca01  = { cpu = 4, ram_gb = 8,  base = "ws2025", disk_gb = 60 }
+    git01 = { cpu = 4, ram_gb = 8, base = "ubuntu", disk_gb = 40 }
+    dc01  = { cpu = 4, ram_gb = 8, base = "ws2025", disk_gb = 60 }
+    dc02  = { cpu = 4, ram_gb = 8, base = "ws2025", disk_gb = 60 }
+    ca01  = { cpu = 4, ram_gb = 8, base = "ws2025", disk_gb = 60 }
     db01  = { cpu = 8, ram_gb = 32, base = "ws2025", disk_gb = 100 }
-    web01 = { cpu = 4, ram_gb = 8,  base = "ws2025", disk_gb = 60 }
-    wks01 = { cpu = 4, ram_gb = 8,  base = "win11",  disk_gb = 60 }
-    wks02 = { cpu = 4, ram_gb = 8,  base = "win11",  disk_gb = 60 }
+    web01 = { cpu = 4, ram_gb = 8, base = "ws2025", disk_gb = 60 }
+    wks01 = { cpu = 4, ram_gb = 8, base = "win11", disk_gb = 60 }
+    wks02 = { cpu = 4, ram_gb = 8, base = "win11", disk_gb = 60 }
     vmm01 = { cpu = 4, ram_gb = 16, base = "ws2025", disk_gb = 60 }
   }
 }
@@ -53,6 +60,17 @@ resource "null_resource" "vm_disk" {
   }
 }
 
+resource "null_resource" "git01_seed" {
+  triggers = {
+    path = local.git01_seed_path
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["PowerShell", "-NoProfile", "-NonInteractive", "-Command"]
+    command     = "& '${abspath(path.module)}/../New-Git01Seed.ps1' -OutputPath '${local.git01_seed_path}'"
+  }
+}
+
 # VM instances
 resource "hyperv_machine_instance" "vm" {
   for_each = local.vms
@@ -64,7 +82,7 @@ resource "hyperv_machine_instance" "vm" {
   static_memory        = true
   memory_startup_bytes = each.value.ram_gb * 1024 * 1024 * 1024
 
-# Gen 2 security settings - disable Secure Boot for lab use
+  # Gen 2 security settings - disable Secure Boot for lab use
   vm_firmware {
     enable_secure_boot              = "Off"
     preferred_network_boot_protocol = "IPv4"
@@ -87,6 +105,15 @@ resource "hyperv_machine_instance" "vm" {
     path                = "${var.vm_dir}\\${upper(each.key)}\\${upper(each.key)}.vhdx"
   }
 
+  dynamic "dvd_drives" {
+    for_each = each.key == "git01" ? [local.git01_seed_path] : []
+    content {
+      controller_number   = 0
+      controller_location = 1
+      path                = dvd_drives.value
+    }
+  }
+
   state                  = "Running"
   wait_for_state_timeout = 300
   wait_for_ips_timeout   = 0
@@ -98,5 +125,5 @@ resource "hyperv_machine_instance" "vm" {
     ]
   }
 
-  depends_on = [null_resource.vm_disk]
+  depends_on = [null_resource.vm_disk, null_resource.git01_seed]
 }

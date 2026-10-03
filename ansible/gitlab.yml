@@ -29,12 +29,17 @@
             Add-Content -Path $authFile -Value $key
         }
         icacls $authFile /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)" | Out-Null
-      when: _git01_pubkey != '' and ansible_os_family == 'Windows'
+      # Facts are disabled in this play; select the OS using inventory groups.
+      when:
+        - _git01_pubkey != ''
+        - "'windows' in group_names or 'hyperv' in group_names"
 
     - name: Add GIT01 public key to authorized_keys (Linux)
       ansible.posix.authorized_key:
         user: labadmin
         key: "{{ _git01_pubkey }}"
         state: present
-      when: _git01_pubkey != '' and ansible_os_family != 'Windows'
+      when:
+        - _git01_pubkey != ''
+        - "'linux' in group_names"
   tags: [ssh_keys]

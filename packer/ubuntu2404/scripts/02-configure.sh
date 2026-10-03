@@ -30,4 +30,16 @@ sudo dd if=/dev/zero of=/EMPTY bs=1M 2>/dev/null || true
 sudo rm -f /EMPTY
 sync
 
+# Let each clone discover its own NoCloud seed instead of the installer's cache.
+# Ubuntu's installer can disable cloud-init/network discovery in these files.
+sudo rm -f /etc/cloud/cloud-init.disabled \
+    /etc/cloud/cloud.cfg.d/99-installer.cfg \
+    /etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg \
+    /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+sudo tee /etc/cloud/cloud.cfg.d/99-adlab-datasource.cfg > /dev/null <<'EOF'
+datasource_list: [NoCloud, None]
+EOF
+sudo cloud-init clean --logs --seed --machine-id --configs network
+sudo rm -f /etc/netplan/*.yaml /etc/netplan/*.yml
+
 echo '=== 02-configure: Complete ==='
