@@ -2,27 +2,27 @@
 
 Active Directory lab built with **Packer + OpenTofu + Ansible**.
 
-| Tool | Purpose |
-|------|---------|
-| Packer | Build reusable base VM images (WS2025, Win11, Ubuntu 24.04) |
-| OpenTofu | Create / destroy Hyper-V VMs from those base images |
-| Ansible | Configure VMs (AD, CA, SQL, IIS, GitLab, SCVMM) |
-| GitLab CE | CI/CD — running on GIT01 (Ubuntu 24.04, 192.168.100.5) |
+| Tool      | Purpose                                                                  |
+| --------- | ------------------------------------------------------------------------ |
+| Packer    | Build reusable base VM images (WS2025, Win11, Ubuntu 24.04)              |
+| OpenTofu  | Create / destroy Hyper-V VMs from those base images                      |
+| Ansible   | Configure VMs (AD, CA, SQL, IIS, GitLab, SCVMM)                          |
+| GitLab CE | CI/CD — running on GIT01 (Ubuntu 24.04, 192.168.100.5)                  |
 | Docker CE | Ansible control-node container — runs on GIT01, not host Docker Desktop |
 
 ## VM Inventory
 
-| Host | IP | OS | Role | Local admin user |
-|------|----|----|------|------------------|
-| GIT01 | 192.168.100.5 | Ubuntu 24.04 | GitLab CE + Ansible control node | `labadmin` |
-| DC01 | 192.168.100.10 | WS2025 | Primary DC, DNS, forest root | `Administrator` |
-| DC02 | 192.168.100.11 | WS2025 | Secondary DC | `Administrator` |
-| CA01 | 192.168.100.20 | WS2025 | Enterprise Root CA | `Administrator` |
-| DB01 | 192.168.100.30 | WS2025 | SQL Server Developer Edition (32 GB RAM, 8 vCPU) | `Administrator` |
-| WEB01 | 192.168.100.40 | WS2025 | IIS | `Administrator` |
-| WKS01 | 192.168.100.50 | Win11 | Workstation | `labadmin` |
-| WKS02 | 192.168.100.51 | Win11 | Workstation | `labadmin` |
-| VMM01 | 192.168.100.60 | WS2025 | SCVMM 2025 (nested virt enabled) | `Administrator` |
+| Host  | IP             | OS           | Role                                             | Local admin user  |
+| ----- | -------------- | ------------ | ------------------------------------------------ | ----------------- |
+| GIT01 | 192.168.100.5  | Ubuntu 24.04 | GitLab CE + Ansible control node                 | `labadmin`      |
+| DC01  | 192.168.100.10 | WS2025       | Primary DC, DNS, forest root                     | `Administrator` |
+| DC02  | 192.168.100.11 | WS2025       | Secondary DC                                     | `Administrator` |
+| CA01  | 192.168.100.20 | WS2025       | Enterprise Root CA                               | `Administrator` |
+| DB01  | 192.168.100.30 | WS2025       | SQL Server Developer Edition (32 GB RAM, 8 vCPU) | `Administrator` |
+| WEB01 | 192.168.100.40 | WS2025       | IIS                                              | `Administrator` |
+| WKS01 | 192.168.100.50 | Win11        | Workstation                                      | `labadmin`      |
+| WKS02 | 192.168.100.51 | Win11        | Workstation                                      | `labadmin`      |
+| VMM01 | 192.168.100.60 | WS2025       | SCVMM 2025 (nested virt enabled)                 | `Administrator` |
 
 ## Transport: SSH everywhere (not WinRM)
 
@@ -52,11 +52,11 @@ Ansible runs inside a Docker container **on GIT01**, not on the Hyper-V host. Th
 
 #### Software (on the Hyper-V host)
 
-| Tool | Minimum version | Notes |
-|------|----------------|-------|
-| Packer | 1.9.0 | `packer.exe` in `PATH` or set `PackerExe` in `config/lab.config.psd1` |
-| OpenTofu | latest stable | `tofu.exe` in `PATH` or set `TofuExe` in `config/lab.config.psd1` |
-| Docker Desktop | latest | Bootstrap only — GIT01 takes over after first run |
+| Tool                     | Minimum version                    | Notes                                                                                                                                                                                                                           |
+| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Packer                   | 1.9.0                              | `packer.exe` in `PATH` or set `PackerExe` in `config/lab.config.psd1`                                                                                                                                                   |
+| OpenTofu                 | latest stable                      | `tofu.exe` in `PATH` or set `TofuExe` in `config/lab.config.psd1`                                                                                                                                                       |
+| Docker Desktop           | latest                             | Bootstrap only — GIT01 takes over after first run                                                                                                                                                                              |
 | **OpenSSH Server** | **Windows optional feature** | **Required — Ansible delegates Hyper-V tasks to the host over SSH. Install via:** `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` then `Start-Service sshd; Set-Service sshd -StartupType Automatic` |
 
 #### One-time Hyper-V setup
@@ -235,10 +235,10 @@ certificate, which the loopback provider accepts with `insecure = true`.
 
 Two runners are required:
 
-| Runner tag | Executor | Host | Used for |
-|------------|----------|------|---------|
+| Runner tag      | Executor           | Host         | Used for                                    |
+| --------------- | ------------------ | ------------ | ------------------------------------------- |
 | `hyperv-host` | Shell (PowerShell) | Hyper-V host | Packer image builds, OpenTofu apply/destroy |
-| `git01` | Docker | GIT01 | All Ansible playbooks |
+| `git01`       | Docker             | GIT01        | All Ansible playbooks                       |
 
 ```powershell
 # Push the repo to GIT01's GitLab
@@ -294,10 +294,10 @@ credentials to the Gitleaks allowlist.
 
 Add these CI/CD variables in GitLab (**Settings → CI/CD → Variables**):
 
-| Variable | Type | Value |
-|----------|------|-------|
-| `AD_LAB_ADMIN_PASSWORD` | Masked, protected | Shared Hyper-V host and lab account password |
-| `SSH_PRIVATE_KEY` | Masked file | Contents of `/home/labadmin/.ssh/id_ed25519` on GIT01 |
+| Variable                  | Type              | Value                                                  |
+| ------------------------- | ----------------- | ------------------------------------------------------ |
+| `AD_LAB_ADMIN_PASSWORD` | Masked, protected | Shared Hyper-V host and lab account password           |
+| `SSH_PRIVATE_KEY`       | Masked file       | Contents of`/home/labadmin/.ssh/id_ed25519` on GIT01 |
 
 Packer and OpenTofu jobs map this variable to their native environment names. Ansible reads it directly; no password is added to its command line.
 
@@ -352,12 +352,12 @@ docker compose -f docker/docker-compose.yml run ansible ansible-playbook gitlab.
 The Ansible image is built from `docker/Dockerfile` using `python:3.12-slim`,
 `ansible-core==2.17.*`, and the following Galaxy collections:
 
-| Collection | Purpose |
-|------------|---------|
-| `ansible.windows` ≥ 2.3.0 | Core Windows modules (`win_powershell`, `win_feature`, etc.) |
-| `community.windows` ≥ 2.2.0 | Supplemental Windows modules (`win_firewall_rule`, etc.) |
-| `ansible.posix` ≥ 1.5.0 | Linux/POSIX modules (GIT01) |
-| `microsoft.ad` ≥ 1.3.0 | Active Directory modules (`microsoft.ad.user`, `microsoft.ad.ou`) |
+| Collection                     | Purpose                                                               |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `ansible.windows` ≥ 2.3.0   | Core Windows modules (`win_powershell`, `win_feature`, etc.)      |
+| `community.windows` ≥ 2.2.0 | Supplemental Windows modules (`win_firewall_rule`, etc.)            |
+| `ansible.posix` ≥ 1.5.0     | Linux/POSIX modules (GIT01)                                           |
+| `microsoft.ad` ≥ 1.3.0      | Active Directory modules (`microsoft.ad.user`, `microsoft.ad.ou`) |
 
 ---
 

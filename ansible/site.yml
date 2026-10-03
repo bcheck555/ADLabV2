@@ -78,7 +78,7 @@
           if ($vm.State -eq 'Running') {
             Write-Host "OK: $vmName is already Running"
           } else {
-    Write-Host "START: $vmName is '$($vm.State)' - starting now..."
+            Write-Host "START: $vmName is '$($vm.State)' - starting now..."
             Start-VM -Name $vmName
             $started += $vmName
             Write-Host "STARTED: $vmName"

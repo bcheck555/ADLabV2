@@ -29,10 +29,10 @@
     }
     $dvd = Get-VMDvdDrive -VMName {{ inventory_hostname }} -ErrorAction SilentlyContinue
     if ($dvd) {
-    Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive exists - updating path to $isoPath"
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] DVD drive exists - updating path to $isoPath"
       Set-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
     } else {
-    Write-Host "[$(Get-Date -f 'HH:mm:ss')] No DVD drive found - adding one with $isoPath"
+      Write-Host "[$(Get-Date -f 'HH:mm:ss')] No DVD drive found - adding one with $isoPath"
       Add-VMDvdDrive -VMName {{ inventory_hostname }} -Path $isoPath
     }
     Write-Host "[$(Get-Date -f 'HH:mm:ss')] ISO attached successfully."
@@ -102,7 +102,7 @@
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] Starting SQL Server setup on $env:COMPUTERNAME"
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] This typically takes 20-40 minutes. Ansible polls every 30 s."
       Write-Host "[$(Get-Date -f 'HH:mm:ss')] ============================================================"
-Write-Host "Starting SQL Server setup - this takes 20-40 minutes..."
+      Write-Host "Starting SQL Server setup - this takes 20-40 minutes..."
       $result = Start-Process -FilePath "${drive}\setup.exe" `
         -ArgumentList $setupArgs -Wait -PassThru -WorkingDirectory "${drive}\"
       Write-Host "SQL Server setup exited with code $($result.ExitCode)"

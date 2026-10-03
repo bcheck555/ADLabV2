@@ -184,15 +184,9 @@ if (-not $SkipAnsible) {
         if ($AnsibleTags)  { $ansibleArgs += '--tags', $AnsibleTags }
 
         & docker-compose @ansibleArgs
-        if ($LASTEXITCODE -eq 4) {
-            Write-Warning "Ansible finished with unreachable hosts (exit 4). See PLAY RECAP above for per-host status."
-        } elseif ($LASTEXITCODE -eq 2) {
-            # ansible-core returns 2 when hosts are rescued via meta:end_host
-            # in a rescue block - the internal failure state isn't fully cleared
-            # even though PLAY RECAP shows failed=0. Treat as a warning.
-            Write-Warning "Ansible exited with code 2 (rescued/skipped hosts). Check PLAY RECAP - if failed=0 for all hosts, this is safe to ignore."
-        } elseif ($LASTEXITCODE -ne 0) {
-            throw "Ansible playbook failed with exit code $LASTEXITCODE"
+        $ansibleExitCode = $LASTEXITCODE
+        if ($ansibleExitCode -ne 0) {
+            throw "Ansible playbook failed with exit code $ansibleExitCode. Review the errors and PLAY RECAP above."
         }
     } finally {
         Pop-Location
