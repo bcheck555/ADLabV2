@@ -149,7 +149,7 @@
 
 # ── SSH keypair for Ansible CI jobs ──────────────────────────────────────────
 # The generated public key is distributed to all lab VMs by site.yml.
-# Add the private key (/home/labadmin/.ssh/id_ed25519) as a masked file
+# Add the private key (/home/labadmin/.ssh/id_ed25519) as a visible, protected file
 # variable (SSH_PRIVATE_KEY) in GitLab → Settings → CI/CD → Variables.
 
 - name: Generate ed25519 keypair for labadmin (Ansible CI identity)

@@ -9,7 +9,7 @@
 #
 # CI/CD variables (Settings → CI/CD → Variables):
 #   - AD_LAB_ADMIN_PASSWORD (masked, protected) - shared lab and host password
-#   - SSH_PRIVATE_KEY     (masked, file) - labadmin private key from GIT01
+#   - SSH_PRIVATE_KEY     (visible, protected, file) - labadmin private key from GIT01
 #                                          (/home/labadmin/.ssh/id_ed25519)
 #
 # Bootstrap note: This pipeline runs AFTER GitLab is up and the git01 runner
@@ -135,11 +135,12 @@ terraform:destroy:
 # ── Ansible stages ────────────────────────────────────────────────────────────
 # These jobs run on GIT01 using the Docker executor.
 # The adlabv2-ansible image must be pre-built on GIT01:
-#   docker compose -f docker/docker-compose.yml build
+#   sudo docker build -t adlabv2-ansible:latest docker
 #
 # The runner config on GIT01 (/etc/gitlab-runner/config.toml) must set:
 #   [runners.docker]
 #     network_mode = "host"   # gives the container direct LabNAT access
+#     pull_policy = "if-not-present"  # uses the locally built Ansible image
 #     volumes = ["/cache"]
 
 .ansible_defaults: &ansible_defaults

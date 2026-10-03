@@ -341,44 +341,107 @@ Two runners are required:
 | `hyperv-host` | Shell (PowerShell) | Hyper-V host | Packer image builds, OpenTofu apply/destroy |
 | `git01`       | Docker             | GIT01        | All Ansible playbooks                       |
 
+#### A. Create the project and push your current branch (Windows host)
+
+1. Browse to `http://192.168.100.5` and log in as `root`, using the password
+   supplied through `AD_LAB_ADMIN_PASSWORD` during bootstrap.
+2. Create a **blank project**, name `ADLabV2`, namespace `root`, path `adlabv2`.
+   Leave **Initialize repository with a README** unchecked.
+3. Create a personal access token with `write_repository` scope for Git over
+   HTTP. Enter `root` as the Git username and the token at password prompts;
+   do not embed the token in URLs or committed files.
+4. In PowerShell, from your existing `D:\Git\ADLabV2` checkout:
+
 ```powershell
-# Push the repo to GIT01's GitLab
-git remote add origin http://192.168.100.5/root/ADLabV2.git
-git push -u origin main
+git status
+git branch --show-current
+git remote -v
+# Add once. If gitlab already exists, inspect its URL before changing it.
+git remote add gitlab http://192.168.100.5/root/adlabv2.git
+git push gitlab HEAD:main
 ```
 
-SSH into GIT01 to register the runners and build the Ansible image:
+`HEAD:main` pushes your **current committed branch** to GitLab's `main` branch.
+No local `main` or `feature/toolchain-redesign` branch is required. It preserves
+the existing `origin` remote and upstream. Commit any intended local changes
+before pushing; uncommitted files are not included. For later updates, use the
+same explicit `git push gitlab HEAD:main` command. In GitLab, confirm `main` is
+the project's default branch and protect it so protected CI variables are
+available. The first pipeline can remain pending until runners are configured.
+
+#### B. Clone and build the image (GIT01)
+
+From the Windows host, connect with `ssh labadmin@192.168.100.5`. Run these
+commands **inside that SSH session**, using `root` and your access token when
+Git prompts for credentials:
 
 ```bash
-ssh labadmin@192.168.100.5
-
-# Register the git01 Docker runner
-sudo gitlab-runner register \
-  --url http://192.168.100.5 \
-  --executor docker \
-  --docker-image alpine:latest \
-  --docker-network-mode host \
-  --tag-list git01 \
-  --non-interactive \
-  --registration-token <token-from-gitlab-ui>
-
-# Build the Ansible Docker image
+git clone http://192.168.100.5/root/adlabv2.git ~/ADLabV2
 cd ~/ADLabV2
-docker compose -f docker/docker-compose.yml build
+sudo docker build -t adlabv2-ansible:latest docker
 ```
 
-Register the `hyperv-host` Shell runner on the Hyper-V host (one-time):
+Pushing to GitLab stores the repository in GitLab; it does not create
+`/home/labadmin/ADLabV2`. The clone above creates that working directory.
+If it already exists, use `git -C ~/ADLabV2 pull --ff-only` instead of cloning.
+The direct Docker build avoids the Compose file's Windows host volume paths.
+Rebuild the image after changing `docker/Dockerfile` or its build inputs.
+
+#### C. Create and register the GIT01 Docker runner
+
+In the project's **Settings > CI/CD > Runners**, create a project runner for
+Linux, set tag `git01`, and leave **Run untagged jobs** disabled. Copy its runner
+authentication token (normally starts with `glrt-`). In GIT01's SSH session:
+
+```bash
+sudo gitlab-runner register --url http://192.168.100.5 \
+  --executor docker --docker-image alpine:latest --docker-network-mode host
+```
+
+Paste the authentication token when prompted. Tags are set in the UI; this
+uses the current [runner registration workflow](https://docs.gitlab.com/runner/register/).
+Edit `sudo nano /etc/gitlab-runner/config.toml`. Inside this runner's existing
+`[runners.docker]` section, set these entries, retaining its other settings:
+
+```toml
+network_mode = "host"
+pull_policy = "if-not-present"
+```
+
+Host networking gives jobs access to LabNAT. The
+[image pull policy](https://docs.gitlab.com/runner/executors/docker/#set-the-if-not-present-pull-policy)
+lets the runner use the locally built `adlabv2-ansible:latest` image instead of
+trying to download it from Docker Hub. Restart and check the service:
+
+```bash
+sudo systemctl restart gitlab-runner
+sudo gitlab-runner verify
+```
+
+Confirm the runner appears online in GitLab.
+
+#### D. Register the Hyper-V host Shell runner (Windows)
+
+Install [GitLab Runner on Windows](https://docs.gitlab.com/runner/install/windows/)
+as a service if it is not installed already. Its service account needs Hyper-V
+access, access to configured local paths, and the Packer/OpenTofu prerequisites.
+In the same project's runner UI, create another runner for Windows with tag
+`hyperv-host`. Use its **separate** authentication token when prompted by this
+command in elevated Windows PowerShell:
 
 ```powershell
-# On the Hyper-V host (PowerShell as Administrator)
-gitlab-runner register `
-  --url http://192.168.100.5 `
-  --executor shell `
-  --shell powershell `
-  --tag-list hyperv-host `
-  --non-interactive `
-  --registration-token <token-from-gitlab-ui>
+gitlab-runner register --url http://192.168.100.5 --executor shell --shell powershell
+gitlab-runner restart
+gitlab-runner verify
 ```
+
+Confirm this runner is also online. Packer/OpenTofu jobs require it; the default
+branch pipeline includes an automatic `terraform:plan` before Ansible jobs.
+Also confirm `lab_hvhost_ip` in `ansible/group_vars/all.yml` is the real host
+management address and its WinRM endpoint is reachable from GIT01. The loopback
+HTTPS listener created by `Setup-Tofu.ps1` serves OpenTofu only.
+
+#### E. Add project CI variables
 
 Install the local secret check from the repository root on each developer machine:
 
@@ -398,7 +461,15 @@ Add these CI/CD variables in GitLab (**Settings → CI/CD → Variables**):
 | Variable                  | Type              | Value                                                  |
 | ------------------------- | ----------------- | ------------------------------------------------------ |
 | `AD_LAB_ADMIN_PASSWORD` | Masked, protected | Shared Hyper-V host and lab account password           |
-| `SSH_PRIVATE_KEY`       | Masked file       | Contents of`/home/labadmin/.ssh/id_ed25519` on GIT01 |
+| `SSH_PRIVATE_KEY`       | File, visible, protected | Contents of `/home/labadmin/.ssh/id_ed25519` on GIT01 |
+
+For `SSH_PRIVATE_KEY`, select variable type **File**, visibility **Visible**,
+and **Protect variable**. Paste the complete private key, including its header
+and footer, and press Enter after the final line so it ends with a newline.
+Multiline SSH keys cannot be masked; see
+[GitLab's SSH variable instructions](https://docs.gitlab.com/ci/jobs/ssh_keys/#add-an-ssh-key-as-a-file-type-variable).
+Disable variable reference expansion. Keep the key out of CI logs and repository
+files. Protected variables are supplied only to pipelines on protected refs.
 
 Packer and OpenTofu jobs map this variable to their native environment names. Ansible reads it directly; no password is added to its command line.
 
