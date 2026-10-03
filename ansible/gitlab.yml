@@ -16,23 +16,30 @@
 # Distribute the SSH key gitlab role generated on GIT01 to all other lab VMs
 # so GitLab CI Ansible jobs can authenticate without passwords.
 - name: Distribute GIT01 Ansible SSH public key
-  hosts: all:!git01
+  # The Hyper-V host uses WinRM, so it does not need an SSH authorized key.
+  hosts: windows:linux:!git01
   gather_facts: false
   vars:
     _git01_pubkey: "{{ hostvars['git01']['git01_ansible_pubkey'] | default('') }}"
   tasks:
     - name: Add GIT01 public key to authorized_keys (Windows)
       ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
         $key = '{{ _git01_pubkey }}'
         $authFile = 'C:\ProgramData\ssh\administrators_authorized_keys'
-        if (-not (Select-String -Path $authFile -Pattern ([regex]::Escape($key)) -Quiet -ErrorAction SilentlyContinue)) {
-            Add-Content -Path $authFile -Value $key
+        New-Item -ItemType Directory -Path (Split-Path -Parent $authFile) -Force | Out-Null
+        if (-not (Test-Path -LiteralPath $authFile)) {
+            Set-Content -LiteralPath $authFile -Value $key -Encoding ascii
+        } elseif (-not (Select-String -LiteralPath $authFile -Pattern ([regex]::Escape($key)) -Quiet)) {
+            Add-Content -LiteralPath $authFile -Value $key -Encoding ascii
         }
-        icacls $authFile /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)" | Out-Null
+        # SIDs work on hosts whose built-in account names are localized.
+        icacls $authFile /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to secure $authFile (icacls exit $LASTEXITCODE)" }
       # Facts are disabled in this play; select the OS using inventory groups.
       when:
         - _git01_pubkey != ''
-        - "'windows' in group_names or 'hyperv' in group_names"
+        - "'windows' in group_names"
 
     - name: Add GIT01 public key to authorized_keys (Linux)
       ansible.posix.authorized_key:
