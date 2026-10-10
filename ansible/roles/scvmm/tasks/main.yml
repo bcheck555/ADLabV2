@@ -15,6 +15,15 @@
 
 # ── Install ADK ───────────────────────────────────────────────────────────────
 
+- name: Publish Hyper-V software packages as the LabSources SMB share
+  ansible.windows.win_share:
+    name: LabSources
+    path: 'D:\LabSources\SoftwarePackages'
+    description: Read-only installer source for lab VMs
+    read: Administrators
+    rule_action: set
+  delegate_to: hvhost
+
 - name: Stage ADK offline layout locally on VMM01
   ansible.windows.win_powershell:
     script: |

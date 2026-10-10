@@ -146,13 +146,17 @@ terraform:destroy:
 .ansible_defaults: &ansible_defaults
   stage: ansible
   tags: [git01]
-  image: adlabv2-ansible:latest
+  image:
+    name: adlabv2-ansible:latest
+    entrypoint: [""]
   variables:
+    ANSIBLE_CONFIG: ansible/ansible.cfg
     ANSIBLE_HOST_KEY_CHECKING: "False"
-    ANSIBLE_STDOUT_CALLBACK: yaml
     GIT_STRATEGY: clone
   before_script:
     - test -n "$AD_LAB_ADMIN_PASSWORD" || { echo "Set the protected AD_LAB_ADMIN_PASSWORD CI variable." >&2; exit 1; }
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-keygen -y -f "$SSH_PRIVATE_KEY" >/dev/null
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
 
@@ -188,6 +192,8 @@ ansible:deploy-limit:
 ansible:ping:
   <<: *ansible_defaults
   script:
-    - ansible -i ansible/inventory/hosts.yml all -m ping
+    - ansible --playbook-dir ansible -i ansible/inventory/hosts.yml linux -m ansible.builtin.ping
+    - ansible --playbook-dir ansible -i ansible/inventory/hosts.yml windows -m ansible.windows.win_ping
+    - ansible --playbook-dir ansible -i ansible/inventory/hosts.yml hyperv -m ansible.windows.win_ping
   rules:
     - when: manual
